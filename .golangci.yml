@@ -1,0 +1,104 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - unused
+    - govet
+    - ineffassign
+    - gocritic
+    - revive
+    - nilnil
+    - nilerr
+    - wrapcheck
+    - contextcheck
+    - exhaustive
+    - bodyclose
+    - gochecknoinits
+    - err113
+
+  settings:
+    exhaustive:
+      # Presence of "default" case in switch statements satisfies exhaustiveness.
+      default-signifies-exhaustive: true
+      # Only run exhaustive check on switches with "//exhaustive:enforce" comment.
+      explicit-exhaustive-switch: true
+      # Consider enums only in package scopes, not in inner scopes.
+      package-scope-only: false
+
+    wrapcheck:
+      # Additional substrings of signatures to ignore (beyond defaults).
+      extra-ignore-sigs:
+        - ".CustomError("
+        - ".SpecificWrap("
+      # Substrings of signatures to ignore (default set).
+      ignore-sigs:
+        - ".Errorf("
+        - "errors.New("
+        - "errors.Unwrap("
+        - ".Wrap("
+        - ".Wrapf("
+        - ".WithMessage("
+        - ".WithMessagef("
+        - ".WithStack("
+      # Regular expressions of signatures to ignore.
+      ignore-sig-regexps:
+        - "\\.ServeHTTP"
+      # Glob patterns for packages whose errors need not be wrapped.
+      ignore-package-globs:
+        - "github.com/mkoziy/http-queue/internal*"
+      # Glob patterns for interfaces whose errors need not be wrapped.
+      ignore-interface-regexps:
+        - "context.Context"
+      # Do not report errors returned from inside the same package.
+      report-internal-errors: false
+
+    revive:
+      rules:
+        - name: blank-imports
+          severity: warning
+        - name: context-as-argument
+          severity: warning
+        - name: context-keys-type
+          severity: warning
+        - name: dot-imports
+          severity: warning
+        - name: error-return
+          severity: warning
+        - name: error-strings
+          severity: warning
+        - name: error-naming
+          severity: warning
+        - name: exported
+          severity: warning
+        - name: if-return
+          severity: warning
+        - name: increment-decrement
+          severity: warning
+        - name: var-naming
+          severity: warning
+        - name: var-declaration
+          severity: warning
+        - name: package-comments
+          severity: warning
+        - name: range
+          severity: warning
+        - name: receiver-naming
+          severity: warning
+        - name: time-naming
+          severity: warning
+        - name: unexported-return
+          severity: warning
+        - name: indent-error-flow
+          severity: warning
+        - name: superfluous-else
+          severity: warning
+        - name: unreachable-code
+          severity: warning
+        - name: unused-parameter
+          severity: warning
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

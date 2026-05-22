@@ -11,9 +11,9 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 - [ ] `make test` runs `go test -race ./...` without invoking lint
 
 ### Task 1: Bootstrap Go Module for Linting
-- [ ] Run `go mod init github.com/mkoziy/http-queue` if `go.mod` does not already exist
-- [ ] Run `go mod tidy` to create a valid baseline module state
-- [ ] Verify `go list ./...` works, accounting for the repository currently having no Go source packages
+- [x] Run `go mod init github.com/mkoziy/http-queue` if `go.mod` does not already exist
+- [x] Run `go mod tidy` to create a valid baseline module state
+- [x] Verify `go list ./...` works, accounting for the repository currently having no Go source packages
 
 ### Task 2: Add Strict golangci-lint Configuration
 - [ ] Create `.golangci.yml` at the repository root
