@@ -88,7 +88,7 @@ POST   /jobs/{id}/nack
 - [ ] Run `go get github.com/oklog/ulid/v2`
 - [ ] Create package directories and placeholder files
 - [ ] Run `go mod tidy`
-- [ ] Run `make lint` and fix package-level issues before continuing
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 2: Implement Configuration Loading
 **Files:**
@@ -100,6 +100,7 @@ POST   /jobs/{id}/nack
 - [ ] Validate that `ADMIN_USER` and `ADMIN_PASS` are the only admin credential source and are stored only in the returned in-memory `Config`
 - [ ] Add tests for defaults, overrides, invalid durations, invalid integer values, and admin credential env loading
 - [ ] Run `go test -race ./config`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 3: Implement BadgerDB Helpers
 **Files:**
@@ -111,6 +112,7 @@ POST   /jobs/{id}/nack
 - [ ] Add helpers for queue-name validation and job ID parsing where needed
 - [ ] Add tests for key formats and queue validation
 - [ ] Run `go test -race ./db`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 4: Implement Token Generation and Hashing
 **Files:**
@@ -122,6 +124,7 @@ POST   /jobs/{id}/nack
 - [ ] Implement `Verify(plain, hashed string) bool` using constant-time comparison
 - [ ] Add tests for token uniqueness, hash verification, and failed verification
 - [ ] Run `go test -race ./token`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 5: Implement Worker Store
 **Files:**
@@ -135,6 +138,7 @@ POST   /jobs/{id}/nack
 - [ ] Implement debounced `TouchWorker` using in-memory last-seen tracking plus BadgerDB persistence
 - [ ] Add tests for register, lookup by token, deregister cleanup, invalid token, and last-seen debounce
 - [ ] Run `go test -race ./queue -run Worker`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 6: Implement Job Store
 **Files:**
@@ -148,6 +152,7 @@ POST   /jobs/{id}/nack
 - [ ] Implement `NackJob` with worker ownership validation, retry handling, and dead-letter movement at max attempts
 - [ ] Add tests for schedule, claim, ack, nack, double-claim race, max-attempt dead-lettering, and invalid queue names
 - [ ] Run `go test -race ./queue -run Job`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 7: Implement Reservation and Worker Sweeper
 **Files:**
@@ -161,6 +166,7 @@ POST   /jobs/{id}/nack
 - [ ] Implement reconciliation for reserved-job orphans and phantom pending index keys
 - [ ] Add tests for expired reservations, expired workers, orphan reserved jobs, phantom pending indexes, and sweep/claim races
 - [ ] Run `go test -race ./queue -run Sweep`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 8: Implement HTTP Middleware
 **Files:**
@@ -174,6 +180,7 @@ POST   /jobs/{id}/nack
 - [ ] Ensure Bearer Auth calls `WorkerByToken` and `TouchWorker`
 - [ ] Add tests for successful auth, missing auth, invalid auth, worker context injection, and proof that admin auth uses config values only
 - [ ] Run `go test -race ./api -run Middleware`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 9: Implement Admin Handlers
 **Files:**
@@ -186,6 +193,7 @@ POST   /jobs/{id}/nack
 - [ ] Implement `DELETE /workers/{id}` to deregister a worker and return `204`
 - [ ] Add integration tests using real BadgerDB in `t.TempDir()` and synthetic Basic Auth env/config values
 - [ ] Run `go test -race ./api -run Admin`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 10: Implement Worker Handlers
 **Files:**
@@ -198,6 +206,7 @@ POST   /jobs/{id}/nack
 - [ ] Map invalid ownership, missing jobs, and malformed paths to appropriate HTTP errors
 - [ ] Add integration tests for claim, empty queue, ack, nack, unauthorized requests, and wrong-worker ownership
 - [ ] Run `go test -race ./api -run Worker`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 11: Implement Router
 **Files:**
@@ -210,6 +219,7 @@ POST   /jobs/{id}/nack
 - [ ] Add stdlib path parsing helpers for queue names, worker IDs, and job IDs
 - [ ] Add route tests for method mismatches, unknown routes, and middleware assignment
 - [ ] Run `go test -race ./api -run Router`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 12: Implement Main Server Lifecycle
 **Files:**
@@ -222,6 +232,7 @@ POST   /jobs/{id}/nack
 - [ ] Start hourly BadgerDB value-log GC loop using `RunValueLogGC(0.5)`
 - [ ] Handle SIGINT/SIGTERM with graceful HTTP shutdown and DB close
 - [ ] Run `go test -race ./...`
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 13: Add Project README
 **Files:**
@@ -233,6 +244,7 @@ POST   /jobs/{id}/nack
 - [ ] Add curl examples for scheduling jobs, registering workers, claiming, acking, and nacking using placeholder admin credentials
 - [ ] Document `make lint`, `make test`, `make build`, and `make run`
 - [ ] Include notes about worker tokens, visibility timeout, retries, and dead-letter behavior
+- [ ] Run `make lint` and require a green linter before continuing
 
 ### Task 14: Final Verification
 **Files:**
@@ -242,6 +254,6 @@ POST   /jobs/{id}/nack
 - [ ] Ensure docs clearly distinguish admin Basic Auth env credentials from persisted worker bearer token hashes
 - [ ] Run `go mod tidy`
 - [ ] Run `make test`
-- [ ] Run `make lint`
+- [ ] Run `make lint` and require a green linter before continuing
 - [ ] Run `make build`
 - [ ] Manually smoke-test the HTTP API with the README curl flow using a temporary BadgerDB directory and temporary `ADMIN_USER` / `ADMIN_PASS` values
