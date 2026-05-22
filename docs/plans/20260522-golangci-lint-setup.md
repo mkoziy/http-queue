@@ -1,3 +1,5 @@
+> **Superseded** by [20260522-golangci-lint-setup-2.md](./20260522-golangci-lint-setup-2.md) — this plan used stale linter names (gosimple, stylecheck, goerr113) and v1 config format.
+
 # golangci-lint Setup — Implementation Plan
 
 ## Context
