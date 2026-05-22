@@ -23,7 +23,7 @@ Go HTTP queue engine backed by BadgerDB. Workers are generic (not queue-bound), 
 ## Key Layout
 
 ```
-job:{queue}:{ulid}                → JSON: {payload, status, workerID, createdAt, attempts}
+job:{ulid}                        → JSON: {queue, payload, status, workerID, createdAt, attempts}
 queue:{queue}:pending:{ulid}      → "" (index only)
 queue:{queue}:reserved:{ulid}     → expiry-unix-timestamp (int64 string)
 queue:{queue}:dead:{ulid}         → "" (index only, jobs exceeding MAX_ATTEMPTS)
@@ -84,7 +84,7 @@ POST   /jobs/{id}/nack             re-queue immediately
 ### 5. Worker store (`queue/worker.go`)
 - [ ] `Worker` struct: `ID`, `TokenHash`, `LastSeen`, `RegisteredAt`
 - [ ] `RegisterWorker(db, cfg) (id, token string, err error)` — writes `worker:{id}` + `workertoken:{hash}` in one txn
-- [ ] `DeregisterWorker(db, id string) error` — deletes `worker:{id}` + `workertoken:{hash}` in one txn; reserved jobs re-queued by next sweep
+- [ ] `DeregisterWorker(db, id string) error` — scans for and requeues the worker's reserved jobs (reserved→pending), then deletes `worker:{id}` + `workertoken:{hash}` in one txn
 - [ ] `TouchWorker(db, id string) error` — debounced: update in-memory last-seen always; flush to BadgerDB only if >(`WorkerExpiry`/2) since last flush (tracked in `sync.Map`)
 - [ ] `WorkerByToken(db, plainToken string) (*Worker, error)` — hash token, seek `workertoken:{hash}` for worker-id, then load `worker:{id}`; O(1), no scan
 
@@ -100,7 +100,7 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [ ] `Start(ctx context.Context)` — ticker loop
 - [ ] `sweep()` — single pass:
   1. Scan `worker:*`, collect expired worker IDs (last-seen > `WorkerExpiry`), delete `worker:{id}` + `workertoken:{hash}` in one txn per worker
-  2. Scan `queue:*:reserved:*`, re-queue expired reservations and reservations owned by expired workers: **delete reserved index + write pending index + update job status must be a single BadgerDB transaction** to prevent sweep/claim race
+  2. Scan `queue:*:reserved:*`, re-queue expired reservations, reservations owned by expired workers, and reservations whose owner worker no longer exists: **delete reserved index + write pending index + update job status must be a single BadgerDB transaction** to prevent sweep/claim race
   3. Reconciliation: scan all `job:*` records with `status=reserved` and verify a matching `queue:*:reserved:*` key exists; re-queue orphans (crash recovery). Scan `queue:*:pending:*` and verify matching job record exists; delete phantom index keys.
 - [ ] Re-queue respects `MAX_ATTEMPTS`: if `job.Attempts >= MAX_ATTEMPTS`, move to dead-letter instead
 

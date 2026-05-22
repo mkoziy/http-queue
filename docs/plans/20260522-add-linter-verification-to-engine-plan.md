@@ -42,7 +42,7 @@ Update `docs/plans/20260522-http-queue-engine-implementation.md` so every task e
 **Files:**
 - Modify: `docs/plans/20260522-http-queue-engine-implementation.md`
 
-- [ ] Count all `### Task` headings and confirm each corresponding task includes `make lint`
-- [ ] Check that lint gates appear after implementation/test verification rather than before code changes
-- [ ] Ensure markdown formatting remains valid with unchecked `- [ ]` checklist items
-- [ ] Run `rg "### Task|make lint" docs/plans/20260522-http-queue-engine-implementation.md` to inspect task/lint coverage visually
+- [x] Count all `### Task` headings and confirm each corresponding task includes `make lint`
+- [x] Check that lint gates appear after implementation/test verification rather than before code changes
+- [x] Ensure markdown formatting remains valid with unchecked `- [ ]` checklist items
+- [x] Run `rg "### Task|make lint" docs/plans/20260522-http-queue-engine-implementation.md` to inspect task/lint coverage visually

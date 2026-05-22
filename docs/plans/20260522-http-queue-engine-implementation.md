@@ -39,7 +39,7 @@ Implement the Go HTTP queue engine described in `docs/plans/20260521-http-queue.
 
 ## Key Layout
 ```text
-job:{queue}:{ulid}                → JSON: {payload, status, workerID, createdAt, attempts}
+job:{ulid}                        → JSON: {queue, payload, status, workerID, createdAt, attempts}
 queue:{queue}:pending:{ulid}      → "" (index only)
 queue:{queue}:reserved:{ulid}     → expiry-unix-timestamp (int64 string)
 queue:{queue}:dead:{ulid}         → "" (index only)
@@ -133,7 +133,7 @@ POST   /jobs/{id}/nack
 
 - [ ] Add `Worker` struct with `ID`, `TokenHash`, `LastSeen`, and `RegisteredAt`
 - [ ] Implement worker registration with both `worker:{id}` and `workertoken:{hash}` writes in one transaction
-- [ ] Implement worker deregistration deleting both worker and token-index keys in one transaction
+- [ ] Implement worker deregistration: scan and requeue the worker's reserved jobs, then delete both worker and token-index keys
 - [ ] Implement `WorkerByToken` using the reverse index without scanning workers
 - [ ] Implement debounced `TouchWorker` using in-memory last-seen tracking plus BadgerDB persistence
 - [ ] Add tests for register, lookup by token, deregister cleanup, invalid token, and last-seen debounce
@@ -162,9 +162,9 @@ POST   /jobs/{id}/nack
 - [ ] Add `Sweeper` type with BadgerDB, config, and logger dependencies
 - [ ] Implement `Start(ctx context.Context)` with ticker lifecycle and context cancellation
 - [ ] Implement expired worker deletion including token reverse-index cleanup
-- [ ] Implement expired reservation requeue/dead-letter transitions in single transactions
-- [ ] Implement reconciliation for reserved-job orphans and phantom pending index keys
-- [ ] Add tests for expired reservations, expired workers, orphan reserved jobs, phantom pending indexes, and sweep/claim races
+- [ ] Implement expired reservation requeue/dead-letter transitions in single transactions, including reservations whose owner worker no longer exists (belt-and-suspenders for deregistered workers)
+- [ ] Implement reconciliation for reserved-job orphans (no matching worker OR no matching reserved index) and phantom pending index keys
+- [ ] Add tests for expired reservations, expired workers, deregistered-worker orphan jobs, phantom pending indexes, and sweep/claim races
 - [ ] Run `go test -race ./queue -run Sweep`
 - [ ] Run `make lint` and require a green linter before continuing
 
