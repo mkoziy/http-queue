@@ -61,9 +61,9 @@ POST   /jobs/{id}/nack             re-queue immediately
 
 ### 1. Bootstrap
 - [x] `go mod init github.com/mkoziy/http-queue`
-- [x] `go get github.com/dgraph-io/badger/v4`
-- [x] `go get github.com/oklog/ulid/v2`
-- [x] Create directory structure: `config/`, `db/`, `queue/`, `api/`, `token/`
+- [ ] `go get github.com/dgraph-io/badger/v4`
+- [ ] `go get github.com/oklog/ulid/v2`
+- [ ] Create directory structure: `config/`, `db/`, `queue/`, `api/`, `token/`
 - [x] Set up `.golangci.yml` with strict curated linter configuration
 - [x] Run `make lint` to verify configuration — **lint must pass cleanly before any implementation task below proceeds** (verified: config valid, no Go source files yet)
 

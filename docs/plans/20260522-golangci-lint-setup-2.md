@@ -36,7 +36,7 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 
 ### Task 5: Verify Lint Setup
 - [x] Run `golangci-lint version` and confirm the installed binary is available
-- [x] Run `golangci-lint run ./...`
+- [x] Run `golangci-lint run ./...` (verified via `make lint` which wraps it; direct invocation requires Go source files present)
 - [x] Run `make lint`
 - [x] Run `make build` and confirm lint executes before build
 - [x] Run `make test` and confirm it only runs tests with the race detector

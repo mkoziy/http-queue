@@ -15,10 +15,10 @@ build: lint
 	fi
 
 test:
-	@if [ -n "$$(find . -name '*_test.go' -not -path './.git/*' 2>/dev/null | head -1)" ]; then \
+	@if [ -n "$$(find . -name '*.go' -not -path './.git/*' 2>/dev/null | head -1)" ]; then \
 		go test -race ./...; \
 	else \
-		echo "no test files found, skipping tests"; \
+		echo "no Go source files found, skipping tests"; \
 	fi
 
 run:
