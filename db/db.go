@@ -20,7 +20,11 @@ func Open(path string) (*badger.DB, error) {
 }
 
 // Close closes the database after flushing pending writes.
+// Returns nil if db is nil.
 func Close(db *badger.DB) error {
+	if db == nil {
+		return nil
+	}
 	if err := db.Close(); err != nil {
 		return fmt.Errorf("badger close: %w", err)
 	}

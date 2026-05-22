@@ -95,24 +95,24 @@ POST   /jobs/{id}/nack
 - Modify: `config/config.go`
 - Create: `config/config_test.go`
 
-- [ ] Add `Config` struct with `Port`, `AdminUser`, `AdminPass`, `BadgerPath`, `VisibilityTimeout`, `WorkerExpiry`, `SweepInterval`, `MaxAttempts`, and `LastSeenDebounce`
-- [ ] Implement `Load() (*Config, error)` using environment variables with safe defaults, including `ADMIN_USER` and `ADMIN_PASS`
-- [ ] Validate that `ADMIN_USER` and `ADMIN_PASS` are the only admin credential source and are stored only in the returned in-memory `Config`
-- [ ] Add tests for defaults, overrides, invalid durations, invalid integer values, and admin credential env loading
-- [ ] Run `go test -race ./config`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Add `Config` struct with `Port`, `AdminUser`, `AdminPass`, `BadgerPath`, `VisibilityTimeout`, `WorkerExpiry`, `SweepInterval`, `MaxAttempts`, and `LastSeenDebounce`
+- [x] Implement `Load() (*Config, error)` using environment variables with safe defaults, including `ADMIN_USER` and `ADMIN_PASS`
+- [x] Validate that `ADMIN_USER` and `ADMIN_PASS` are the only admin credential source and are stored only in the returned in-memory `Config`
+- [x] Add tests for defaults, overrides, invalid durations, invalid integer values, and admin credential env loading
+- [x] Run `go test -race ./config`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 3: Implement BadgerDB Helpers
 **Files:**
 - Modify: `db/db.go`
 - Create: `db/db_test.go`
 
-- [ ] Add `Open(path string) (*badger.DB, error)`
-- [ ] Add key builders for jobs, pending indexes, reserved indexes, dead-letter indexes, workers, and worker-token reverse indexes
-- [ ] Add helpers for queue-name validation and job ID parsing where needed
-- [ ] Add tests for key formats and queue validation
-- [ ] Run `go test -race ./db`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Add `Open(path string) (*badger.DB, error)`
+- [x] Add key builders for jobs, pending indexes, reserved indexes, dead-letter indexes, workers, and worker-token reverse indexes
+- [x] Add helpers for queue-name validation and job ID parsing where needed
+- [x] Add tests for key formats and queue validation
+- [x] Run `go test -race ./db`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 4: Implement Token Generation and Hashing
 **Files:**
