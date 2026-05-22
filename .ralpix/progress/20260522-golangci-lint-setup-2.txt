@@ -370,3 +370,33 @@ Started: 2026-05-22T14:17:08.262Z
 [2026-05-22T14:25:36.780Z] REVIEW_LOOP    first: tool finished in 1s: bash cd /Users/michael/github.com/mkoziy/http-queue && go mod tidy 2>&1 && echo "OK" && cat go.mod
 [2026-05-22T14:25:39.382Z] REVIEW_LOOP    first: assistant: Everything is valid. Now commit the fixes:
 [2026-05-22T14:25:39.382Z] REVIEW_LOOP    first: tool started: bash cd /Users/michael/github.com/mkoziy/http-queue && git add -A && git diff --cached --stat
+[2026-05-22T14:25:39.418Z] REVIEW_LOOP    first: tool finished in 1s: bash cd /Users/michael/github.com/mkoziy/http-queue && git add -A && git diff --cached --stat
+[2026-05-22T14:25:41.582Z] REVIEW_LOOP    first: tool started: bash cd /Users/michael/github.com/mkoziy/http-queue && git commit -m "ralpix: review - fix linter config...
+[2026-05-22T14:25:41.610Z] REVIEW_LOOP    first: tool finished in 1s: bash cd /Users/michael/github.com/mkoziy/http-queue && git commit -m "ralpix: review - fix linter config...
+[2026-05-22T14:25:52.448Z] REVIEW_LOOP    first: assistant: Now let me write the progress log:
+[2026-05-22T14:25:52.448Z] REVIEW_LOOP    first: tool started: bash cat >> /Users/michael/github.com/mkoziy/http-queue/.ralpix/progress/20260522-golangci-lint-setup-2....
+
+============================================================
+REVIEW — First Pass (2026-05-22)
+============================================================
+
+Critical Issues:  NONE
+
+Major Issues (3 fixed):
+1. go.mod: `go 1.26.2` → `go 1.26` (conventional major.minor format)
+2. .golangci.yml: Removed placeholder wrapcheck extra-ignore-sigs (.CustomError, .SpecificWrap); added run.timeout: 5m
+3. docs/plans/20260522-golangci-lint-setup-2.md: Fixed stale linter names (gosimple/stylecheck → staticcheck, goerr113 → err113)
+
+Minor Issues (2 fixed):
+1. docs/plans/20260521-http-queue.md: Marked "Run make lint to verify" as checked
+2. .golangci.yml: Added run.timeout: 5m to prevent indefinite lint runs
+
+Verification:
+- golangci-lint config verify: PASS
+- golangci-lint linters: 15 enabled (correct set for v2)
+- go mod tidy: PASS
+- All changes committed
+
+All critical and major issues have been fixed and verified.
+[2026-05-22T14:25:52.453Z] REVIEW_LOOP    first: tool finished in 1s: bash cat >> /Users/michael/github.com/mkoziy/http-queue/.ralpix/progress/20260522-golangci-lint-setup-2....
+[2026-05-22T14:25:58.181Z] REVIEW_LOOP    first: tool started: bash cd /Users/michael/github.com/mkoziy/http-queue && git add -A && git commit -m "ralpix: review - upd...
