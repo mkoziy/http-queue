@@ -68,8 +68,8 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] Run `make lint` to verify configuration — **lint must pass cleanly before any implementation task below proceeds** (verified: config valid, no Go source files yet)
 
 ### 2. Config (`config/config.go`)
-- [ ] Struct with all env vars: `PORT`, `ADMIN_USER`, `ADMIN_PASS`, `BadgerPath`, `VisibilityTimeout`, `WorkerExpiry`, `SweepInterval`, `MaxAttempts`, `LastSeenDebounce`
-- [ ] `Load() (*Config, error)` reads from env with defaults
+- [x] Struct with all env vars: `PORT`, `ADMIN_USER`, `ADMIN_PASS`, `BadgerPath`, `VisibilityTimeout`, `WorkerExpiry`, `SweepInterval`, `MaxAttempts`, `LastSeenDebounce`
+- [x] `Load() (*Config, error)` reads from env with defaults
 
 ### 3. DB layer (`db/db.go`)
 - [ ] `Open(path string) (*badger.DB, error)` wrapper

@@ -84,11 +84,11 @@ POST   /jobs/{id}/nack
 - Create: `api/workers.go`
 - Create: `main.go`
 
-- [ ] Run `go get github.com/dgraph-io/badger/v4`
-- [ ] Run `go get github.com/oklog/ulid/v2`
-- [ ] Create package directories and placeholder files
-- [ ] Run `go mod tidy`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Run `go get github.com/dgraph-io/badger/v4`
+- [x] Run `go get github.com/oklog/ulid/v2`
+- [x] Create package directories and placeholder files
+- [x] Run `go mod tidy`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 2: Implement Configuration Loading
 **Files:**
