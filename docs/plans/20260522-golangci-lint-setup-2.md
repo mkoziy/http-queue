@@ -22,11 +22,11 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 - [x] Configure issue limits with `max-issues-per-linter: 0` and `max-same-issues: 0`
 
 ### Task 3: Add Makefile Targets
-- [ ] Create a root `Makefile`
-- [ ] Add `.PHONY` declarations for `lint`, `build`, and `test`
-- [ ] Add `lint` target running `golangci-lint run ./...`
-- [ ] Add `build` target depending on `lint` and running `go build ./...`
-- [ ] Add `test` target running `go test -race ./...` without depending on `lint`
+- [x] Create a root `Makefile`
+- [x] Add `.PHONY` declarations for `lint`, `build`, and `test`
+- [x] Add `lint` target running `golangci-lint run ./...`
+- [x] Add `build` target depending on `lint` and running `go build ./...`
+- [x] Add `test` target running `go test -race ./...` without depending on `lint`
 
 ### Task 4: Update Main HTTP Queue Plan
 - [ ] Modify `docs/plans/20260521-http-queue.md`

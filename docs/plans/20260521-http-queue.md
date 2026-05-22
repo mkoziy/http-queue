@@ -60,10 +60,12 @@ POST   /jobs/{id}/nack             re-queue immediately
 ## Tasks
 
 ### 1. Bootstrap
-- [ ] `go mod init github.com/mkoziy/http-queue`
-- [ ] `go get go.etcd.io/bbolt` — wait, use BadgerDB: `go get github.com/dgraph-io/badger/v4`
-- [ ] `go get github.com/oklog/ulid/v2`
-- [ ] Create directory structure: `config/`, `db/`, `queue/`, `api/`, `token/`
+- [x] `go mod init github.com/mkoziy/http-queue`
+- [x] `go get github.com/dgraph-io/badger/v4`
+- [x] `go get github.com/oklog/ulid/v2`
+- [x] Create directory structure: `config/`, `db/`, `queue/`, `api/`, `token/`
+- [x] Set up `.golangci.yml` with strict curated linter configuration
+- [ ] Run `make lint` to verify configuration — **lint must pass cleanly before any implementation task below proceeds**
 
 ### 2. Config (`config/config.go`)
 - [ ] Struct with all env vars: `PORT`, `ADMIN_USER`, `ADMIN_PASS`, `BadgerPath`, `VisibilityTimeout`, `WorkerExpiry`, `SweepInterval`, `MaxAttempts`, `LastSeenDebounce`
@@ -136,5 +138,8 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [ ] `api/` — integration tests with real BadgerDB (each test gets a fresh `t.TempDir()`; defer `db.Close()`)
 
 ### 15. Makefile + README
-- [ ] `make build`, `make test`, `make run`
+- [x] `Makefile` with `build`, `test`, `lint`, `run` targets
+- [x] `make build` depends on `lint` — **lint must pass before building**
+- [x] `make test` is independent of `lint` — fast test iteration without lint gate
+- [x] `make run` available for quick manual testing
 - [ ] README with env vars table and curl examples
