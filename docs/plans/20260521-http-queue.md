@@ -77,9 +77,9 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [ ] `Close()` with flush
 
 ### 4. Token package (`token/token.go`)
-- [ ] `Generate() (plain, hashed string, error)` — crypto/rand 32 bytes, base64url plain, sha256 hash stored
-- [ ] `Hash(plain string) string`
-- [ ] `Verify(plain, hashed string) bool`
+- [x] `Generate() (plain, hashed string, error)` — crypto/rand 32 bytes, base64url plain, sha256 hash stored
+- [x] `Hash(plain string) string`
+- [x] `Verify(plain, hashed string) bool`
 
 ### 5. Worker store (`queue/worker.go`)
 - [ ] `Worker` struct: `ID`, `TokenHash`, `LastSeen`, `RegisteredAt`
