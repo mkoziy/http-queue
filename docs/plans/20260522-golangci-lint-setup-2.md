@@ -29,10 +29,10 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 - [x] Add `test` target running `go test -race ./...` without depending on `lint`
 
 ### Task 4: Update Main HTTP Queue Plan
-- [ ] Modify `docs/plans/20260521-http-queue.md`
-- [ ] Update the Bootstrap task to mention golangci-lint must pass before implementation proceeds
-- [ ] Update the Makefile section so it reflects `build` depending on `lint`
-- [ ] Keep `make test` documented as independent from lint
+- [x] Modify `docs/plans/20260521-http-queue.md`
+- [x] Update the Bootstrap task to mention golangci-lint must pass before implementation proceeds
+- [x] Update the Makefile section so it reflects `build` depending on `lint`
+- [x] Keep `make test` documented as independent from lint
 
 ### Task 5: Verify Lint Setup
 - [ ] Run `golangci-lint version` and confirm the installed binary is available
