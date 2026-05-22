@@ -16,10 +16,10 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 - [x] Verify `go list ./...` works, accounting for the repository currently having no Go source packages
 
 ### Task 2: Add Strict golangci-lint Configuration
-- [ ] Create `.golangci.yml` at the repository root
-- [ ] Enable curated linters: `errcheck`, `staticcheck`, `gosimple`, `unused`, `govet`, `ineffassign`, `stylecheck`, `gocritic`, `revive`, `nilnil`, `nilerr`, `wrapcheck`, `contextcheck`, `exhaustive`, `bodyclose`, `gochecknoinits`, and `goerr113`
-- [ ] Add linter settings for `exhaustive`, `wrapcheck`, and `revive`
-- [ ] Configure issue limits with `max-issues-per-linter: 0` and `max-same-issues: 0`
+- [x] Create `.golangci.yml` at the repository root
+- [x] Enable curated linters: `errcheck`, `staticcheck`, `gosimple`, `unused`, `govet`, `ineffassign`, `stylecheck`, `gocritic`, `revive`, `nilnil`, `nilerr`, `wrapcheck`, `contextcheck`, `exhaustive`, `bodyclose`, `gochecknoinits`, and `goerr113`
+- [x] Add linter settings for `exhaustive`, `wrapcheck`, and `revive`
+- [x] Configure issue limits with `max-issues-per-linter: 0` and `max-same-issues: 0`
 
 ### Task 3: Add Makefile Targets
 - [ ] Create a root `Makefile`
