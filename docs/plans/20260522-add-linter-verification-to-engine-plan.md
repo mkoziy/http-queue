@@ -32,10 +32,10 @@ Update `docs/plans/20260522-http-queue-engine-implementation.md` so every task e
 **Files:**
 - Modify: `docs/plans/20260522-http-queue-engine-implementation.md`
 
-- [ ] Update Task 1’s existing lint checklist item to consistently say `Run \`make lint\` and ensure it is green before continuing`
-- [ ] Keep Task 14’s final `make lint` verification item and ensure it clearly requires green output
-- [ ] Avoid duplicating lint items within the same task
-- [ ] Confirm each task has exactly one task-level linter gate unless the final verification task intentionally includes the global lint check
+- [x] Update Task 1’s existing lint checklist item to consistently say `Run \`make lint\` and ensure it is green before continuing`
+- [x] Keep Task 14’s final `make lint` verification item and ensure it clearly requires green output
+- [x] Avoid duplicating lint items within the same task
+- [x] Confirm each task has exactly one task-level linter gate unless the final verification task intentionally includes the global lint check
 
 ### Task 3: Verify Plan Consistency
 
