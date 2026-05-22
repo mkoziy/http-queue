@@ -22,10 +22,10 @@ Update `docs/plans/20260522-http-queue-engine-implementation.md` so every task e
 **Files:**
 - Modify: `docs/plans/20260522-http-queue-engine-implementation.md`
 
-- [ ] Review all `### Task N:` sections and identify tasks missing an explicit `make lint` checklist item
-- [ ] Add `- [ ] Run \`make lint\` and ensure it is green before continuing` after each task’s local test/build verification item
-- [ ] For tasks without a test command, add the lint checklist item as the final checklist item in that task
-- [ ] Preserve existing task order, files blocks, feature scope, and implementation wording
+- [x] Review all `### Task N:` sections and identify tasks missing an explicit `make lint` checklist item
+- [x] Add `- [ ] Run \`make lint\` and ensure it is green before continuing` after each task’s local test/build verification item
+- [x] For tasks without a test command, add the lint checklist item as the final checklist item in that task
+- [x] Preserve existing task order, files blocks, feature scope, and implementation wording
 
 ### Task 2: Normalize Existing Lint Wording
 
