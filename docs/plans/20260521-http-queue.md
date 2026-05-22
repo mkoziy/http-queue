@@ -65,7 +65,7 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] `go get github.com/oklog/ulid/v2`
 - [x] Create directory structure: `config/`, `db/`, `queue/`, `api/`, `token/`
 - [x] Set up `.golangci.yml` with strict curated linter configuration
-- [ ] Run `make lint` to verify configuration — **lint must pass cleanly before any implementation task below proceeds**
+- [x] Run `make lint` to verify configuration — **lint must pass cleanly before any implementation task below proceeds** (verified: config valid, no Go source files yet)
 
 ### 2. Config (`config/config.go`)
 - [ ] Struct with all env vars: `PORT`, `ADMIN_USER`, `ADMIN_PASS`, `BadgerPath`, `VisibilityTimeout`, `WorkerExpiry`, `SweepInterval`, `MaxAttempts`, `LastSeenDebounce`

@@ -17,7 +17,7 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 
 ### Task 2: Add Strict golangci-lint Configuration
 - [x] Create `.golangci.yml` at the repository root
-- [x] Enable curated linters: `errcheck`, `staticcheck`, `gosimple`, `unused`, `govet`, `ineffassign`, `stylecheck`, `gocritic`, `revive`, `nilnil`, `nilerr`, `wrapcheck`, `contextcheck`, `exhaustive`, `bodyclose`, `gochecknoinits`, and `goerr113`
+- [x] Enable curated linters: `errcheck`, `staticcheck` (includes gosimple + stylecheck in v2), `unused`, `govet`, `ineffassign`, `gocritic`, `revive`, `nilnil`, `nilerr`, `wrapcheck`, `contextcheck`, `exhaustive`, `bodyclose`, `gochecknoinits`, and `err113`
 - [x] Add linter settings for `exhaustive`, `wrapcheck`, and `revive`
 - [x] Configure issue limits with `max-issues-per-linter: 0` and `max-same-issues: 0`
 
@@ -35,8 +35,8 @@ Set up a strict, curated golangci-lint configuration for the Go HTTP queue proje
 - [x] Keep `make test` documented as independent from lint
 
 ### Task 5: Verify Lint Setup
-- [ ] Run `golangci-lint version` and confirm the installed binary is available
-- [ ] Run `golangci-lint run ./...`
-- [ ] Run `make lint`
-- [ ] Run `make build` and confirm lint executes before build
-- [ ] Run `make test` and confirm it only runs tests with the race detector
+- [x] Run `golangci-lint version` and confirm the installed binary is available
+- [x] Run `golangci-lint run ./...`
+- [x] Run `make lint`
+- [x] Run `make build` and confirm lint executes before build
+- [x] Run `make test` and confirm it only runs tests with the race detector

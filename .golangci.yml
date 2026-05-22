@@ -1,5 +1,8 @@
 version: "2"
 
+run:
+  timeout: 5m
+
 linters:
   enable:
     - errcheck
@@ -28,10 +31,6 @@ linters:
       package-scope-only: false
 
     wrapcheck:
-      # Additional substrings of signatures to ignore (beyond defaults).
-      extra-ignore-sigs:
-        - ".CustomError("
-        - ".SpecificWrap("
       # Substrings of signatures to ignore (default set).
       ignore-sigs:
         - ".Errorf("
