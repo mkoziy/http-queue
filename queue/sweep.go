@@ -93,6 +93,13 @@ func (s *Sweeper) expireWorkers() {
 
 	// Deregister each expired worker.
 	for _, id := range expiredIDs {
+		// Re-check in-memory cache: worker may have become active after
+		// the View snapshot was taken (e.g., sent a claim/ack/nack request).
+		if ls, ok := workerLastSeen.Load(id); ok {
+			if lastSeen, ok := ls.(time.Time); ok && !lastSeen.Before(expiryThreshold) {
+				continue
+			}
+		}
 		if err := DeregisterWorker(s.db, id); err != nil {
 			log.Printf("sweep: deregister expired worker %s: %v", id, err)
 		} else {

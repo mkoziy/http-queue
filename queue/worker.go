@@ -222,11 +222,12 @@ func TouchWorker(database *badger.DB, id string, debounce time.Duration) {
 		return txn.Set(db.WorkerKey(id), updated)
 	}); err != nil {
 		// Log but don't fail — the in-memory cache is still up-to-date
-		// and the next debounce cycle will retry.
+		// and the next call will retry because the flush time wasn't recorded.
 		log.Printf("touch worker %s: flush to db: %v", id, err)
+		return
 	}
 
-	// Record flush time.
+	// Record flush time only on success so failures are retried on next call.
 	workerLastSeen.Store("flush:"+id, now)
 }
 
