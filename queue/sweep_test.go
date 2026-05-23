@@ -909,6 +909,115 @@ func TestSweeper_Start_RunsInitialSweep(t *testing.T) {
 	}
 }
 
+func TestSweeper_Start_DoesNotExpireWorkersOnStartup(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+	cfg.SweepInterval = 1 * time.Hour // very long ticker so only the initial pass runs
+
+	// Register a worker.
+	id, plainToken, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	// Set its lastSeen to well beyond WorkerExpiry (simulating a restart
+	// where the worker's durable LastSeen is stale).
+	setWorkerLastSeen(t, database, id, time.Now().UTC().Add(-1*time.Hour))
+	// Clear in-memory cache — the worker hasn't reconnected yet.
+	workerLastSeen.Delete(id)
+	workerLastSeen.Delete("flush:" + id)
+
+	// Also set up an expired reservation to verify the startup pass
+	// still handles reservation expiry.
+	_, err = ScheduleJob(database, "startupqueue", json.RawMessage(`{"expired":"reservation"}`))
+	if err != nil {
+		t.Fatalf("ScheduleJob(): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "startupqueue", "some-worker", cfg.VisibilityTimeout)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob() returned nil")
+	}
+
+	// Expire the reservation.
+	setReservedExpiry(t, database, "startupqueue", claimed.ID, time.Now().UTC().Add(-1*time.Hour))
+
+	// Start the sweeper (should run startupSweep immediately).
+	sweeper := NewSweeper(database, cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		sweeper.Start(ctx)
+		close(done)
+	}()
+
+	// Give it time to run the initial startup pass.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+
+	// --- Worker must NOT have been expired by the startup pass ---
+
+	// Worker record should still exist.
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.WorkerKey(id))
+		return err
+	})
+	if err != nil {
+		t.Error("worker record was deleted by startup sweep — should have been preserved")
+	}
+
+	// Token index should still exist.
+	hashedToken := token.Hash(plainToken)
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.WorkerTokenKey(hashedToken))
+		return err
+	})
+	if err != nil {
+		t.Error("worker token index was deleted by startup sweep — should have been preserved")
+	}
+
+	// --- Expired reservation must still have been handled ---
+
+	err = database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(claimed.ID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		var j Job
+		if err := json.Unmarshal(data, &j); err != nil {
+			return err
+		}
+		if j.Status != StatusPending {
+			t.Errorf("expired reservation job status = %q, want %q (startup sweep should re-queue)", j.Status, StatusPending)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("reading expired reservation job: %v", err)
+	}
+
+	// Verify reserved index is gone for the expired reservation.
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.ReservedIndexKey("startupqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("reserved index should be gone after startup sweep expired reservation")
+	}
+}
+
 // ---- Sweep + Claim Race ----
 
 func TestSweep_ClaimRace(t *testing.T) {

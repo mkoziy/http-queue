@@ -27,12 +27,16 @@ func NewSweeper(database *badger.DB, cfg *config.Config) *Sweeper {
 }
 
 // Start begins the sweeper loop. It runs until the context is cancelled.
+// The immediate startup pass performs only startup-safe maintenance:
+// expired-reservation re-queuing and reconciliation, but NOT worker expiry.
+// Worker expiry is deferred to the first periodic tick so that durable
+// workers have a chance to reconnect after a restart before being removed.
 func (s *Sweeper) Start(ctx context.Context) {
 	ticker := time.NewTicker(s.cfg.SweepInterval)
 	defer ticker.Stop()
 
-	// Run one sweep immediately on start.
-	s.sweep()
+	// Run a startup-safe sweep immediately — no worker expiry.
+	s.startupSweep()
 
 	for {
 		select {
@@ -42,6 +46,14 @@ func (s *Sweeper) Start(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// startupSweep performs only the maintenance operations that are safe to
+// run immediately on startup. Worker expiry is excluded so that durable
+// workers whose LastSeen is stale are not removed before they can reconnect.
+func (s *Sweeper) startupSweep() {
+	s.expireReservations()
+	s.reconcile()
 }
 
 func (s *Sweeper) sweep() {
