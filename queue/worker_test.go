@@ -755,3 +755,76 @@ func TestWorkerLastSeen_CleanedOnDeregister(t *testing.T) {
 		t.Error("worker still in in-memory cache after deregistration")
 	}
 }
+
+func TestDeregisterWorker_RequeuesManyJobs(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Register worker.
+	id, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	// Schedule and claim enough jobs to exceed one maintenance batch.
+	const numJobs = maintenanceBatchSize + 5
+	claimedIDs := make(map[string]bool, numJobs)
+
+	payload := []byte(`{"n":0}`)
+	for i := 0; i < numJobs; i++ {
+		job, err := ScheduleJob(database, "testqueue", payload)
+		if err != nil {
+			t.Fatalf("ScheduleJob %d: %v", i, err)
+		}
+		claimed, err := ClaimNextJob(database, "testqueue", id, cfg.VisibilityTimeout)
+		if err != nil {
+			t.Fatalf("ClaimNextJob %d: %v", i, err)
+		}
+		if claimed == nil {
+			t.Fatalf("ClaimNextJob %d returned nil", i)
+		}
+		_ = job
+		claimedIDs[claimed.ID] = true
+	}
+
+	// Deregister — this should process jobs in multiple batches.
+	if err := DeregisterWorker(database, id); err != nil {
+		t.Fatalf("DeregisterWorker(): %v", err)
+	}
+
+	// All claimed jobs should be back to pending.
+	for jobID := range claimedIDs {
+		var j Job
+		err := database.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(db.JobKey(jobID))
+			if err != nil {
+				return err
+			}
+			data, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(data, &j)
+		})
+		if err != nil {
+			t.Fatalf("reading job %s: %v", jobID, err)
+		}
+		if j.Status != StatusPending {
+			t.Errorf("job %s status = %q, want %q", jobID, j.Status, StatusPending)
+		}
+		if j.WorkerID != "" {
+			t.Errorf("job %s WorkerID = %q, want empty", jobID, j.WorkerID)
+		}
+	}
+
+	// Verify the worker record is gone.
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.WorkerKey(id))
+		return err
+	})
+	if err == nil {
+		t.Error("worker record still exists after deregistration")
+	}
+}

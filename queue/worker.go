@@ -71,109 +71,45 @@ func RegisterWorker(database *badger.DB, _ *config.Config) (id, plainToken strin
 }
 
 // DeregisterWorker removes a worker and re-queues its reserved jobs.
+// Reserved jobs are re-queued in bounded write transactions to prevent
+// unbounded key mutations in a single BadgerDB transaction.
 func DeregisterWorker(database *badger.DB, id string) error {
-	err := database.Update(func(txn *badger.Txn) error {
-		// Load worker to get token hash.
-		workerItem, err := txn.Get(db.WorkerKey(id))
-		if err != nil {
-			return fmt.Errorf("worker not found: %w", err)
+	// Step 1: Load worker token hash in a read transaction.
+	tokenHash, err := loadWorkerTokenHash(database, id)
+	if err != nil {
+		return fmt.Errorf("deregister worker: %w", err)
+	}
+
+	// Step 2: Collect owned reserved job refs in a read transaction.
+	refs, err := collectOwnedReservedRefs(database, id)
+	if err != nil {
+		return fmt.Errorf("deregister worker: %w", err)
+	}
+
+	// Step 3: Re-queue owned reservations in bounded write transactions.
+	for batchIdx, batch := range batchSlice(refs, maintenanceBatchSize) {
+		if err := requeueReservedBatch(database, id, batch); err != nil {
+			return fmt.Errorf("deregister worker: batch %d: %w", batchIdx, err)
 		}
+	}
 
-		workerData, err := workerItem.ValueCopy(nil)
-		if err != nil {
-			return fmt.Errorf("read worker data: %w", err)
-		}
-
-		var w Worker
-		if err := json.Unmarshal(workerData, &w); err != nil {
-			return fmt.Errorf("unmarshal worker: %w", err)
-		}
-
-		// Re-queue all reserved jobs owned by this worker.
-		// We scan reserved indexes and check worker ownership via job records.
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-
-		// We need to scan all reserved indexes. In practice this means scanning
-		// all queue:*:reserved:* keys. This is a full scan but deregistration
-		// is an admin operation, not a hot path.
-		prefix := []byte("queue:")
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			key := string(item.Key())
-
-			// Check if it's a reserved index key.
-			if !strings.Contains(key, ":reserved:") {
-				continue
-			}
-
-			// Extract queue name and ULID from the key.
-			// Format: queue:{queue}:reserved:{ulid}
-			parts := strings.SplitN(key, ":", 4)
-			if len(parts) < 4 {
-				continue
-			}
-			queueName := parts[1]
-			ulidStr := parts[3]
-
-			// Load the job record to check worker ownership.
-			jobItem, jobErr := txn.Get(db.JobKey(ulidStr))
-			if jobErr != nil {
-				// Orphaned index; delete it.
-				_ = txn.Delete(item.Key())
-				continue
-			}
-
-			jobData, jobErr := jobItem.ValueCopy(nil)
-			if jobErr != nil {
-				continue
-			}
-
-			var job Job
-			if err := json.Unmarshal(jobData, &job); err != nil {
-				continue
-			}
-
-			if job.WorkerID != id {
-				continue
-			}
-
-			// Re-queue: delete reserved index, write pending index, update job.
-			if err := txn.Delete(item.Key()); err != nil {
-				return fmt.Errorf("delete reserved index: %w", err)
-			}
-
-			job.Status = StatusPending
-			job.WorkerID = ""
-			updatedData, err := json.Marshal(job)
-			if err != nil {
-				return fmt.Errorf("marshal re-queued job: %w", err)
-			}
-			if err := txn.Set(db.PendingIndexKey(queueName, ulidStr), nil); err != nil {
-				return fmt.Errorf("set pending index: %w", err)
-			}
-			if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
-				return fmt.Errorf("update job: %w", err)
-			}
-		}
-
-		// Delete token reverse index.
-		if err := txn.Delete(db.WorkerTokenKey(w.TokenHash)); err != nil {
+	// Step 4: Delete worker record and token index only after all
+	// reservation batches complete successfully, so a failed partial
+	// deregistration remains retryable.
+	err = database.Update(func(txn *badger.Txn) error {
+		if err := txn.Delete(db.WorkerTokenKey(tokenHash)); err != nil {
 			return fmt.Errorf("delete worker token index: %w", err)
 		}
-
-		// Delete worker record.
 		if err := txn.Delete(db.WorkerKey(id)); err != nil {
 			return fmt.Errorf("delete worker: %w", err)
 		}
-
 		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("deregister worker: %w", err)
 	}
 
-	// Clean up in-memory last-seen.
+	// Step 5: Clean up in-memory cache only after full success.
 	workerLastSeen.Delete(id)
 	workerLastSeen.Delete("flush:" + id)
 
@@ -273,4 +209,151 @@ func WorkerByToken(database *badger.DB, plainToken string) (*Worker, error) {
 	}
 
 	return w, nil
+}
+
+// reservedRef identifies a reserved job owned by a specific worker.
+type reservedRef struct {
+	queue string
+	ulid  string
+}
+
+// loadWorkerTokenHash reads a worker's token hash from the database
+// in a read transaction.
+func loadWorkerTokenHash(database *badger.DB, id string) (string, error) {
+	var tokenHash string
+	err := database.View(func(txn *badger.Txn) error {
+		workerItem, err := txn.Get(db.WorkerKey(id))
+		if err != nil {
+			return fmt.Errorf("worker not found: %w", err)
+		}
+		workerData, err := workerItem.ValueCopy(nil)
+		if err != nil {
+			return fmt.Errorf("read worker data: %w", err)
+		}
+		var w Worker
+		if err := json.Unmarshal(workerData, &w); err != nil {
+			return fmt.Errorf("unmarshal worker: %w", err)
+		}
+		tokenHash = w.TokenHash
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("load worker token hash: %w", err)
+	}
+	return tokenHash, nil
+}
+
+// collectOwnedReservedRefs scans all reserved indexes and collects refs
+// for jobs owned by the given worker. Returns an empty slice if none found.
+func collectOwnedReservedRefs(database *badger.DB, workerID string) ([]reservedRef, error) {
+	var refs []reservedRef
+	err := database.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		prefix := []byte("queue:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+
+			if !strings.Contains(key, ":reserved:") {
+				continue
+			}
+
+			parts := strings.SplitN(key, ":", 4)
+			if len(parts) < 4 {
+				continue
+			}
+			queueName := parts[1]
+			ulidStr := parts[3]
+
+			// Load the job record to check worker ownership.
+			jobItem, jobErr := txn.Get(db.JobKey(ulidStr))
+			if jobErr != nil {
+				// Orphaned index; skip — will be cleaned up in the
+				// requeue batch if it still exists.
+				continue
+			}
+
+			jobData, jobErr := jobItem.ValueCopy(nil)
+			if jobErr != nil {
+				continue
+			}
+
+			var job Job
+			if err := json.Unmarshal(jobData, &job); err != nil {
+				continue
+			}
+
+			if job.WorkerID != workerID {
+				continue
+			}
+
+			refs = append(refs, reservedRef{queue: queueName, ulid: ulidStr})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("collect owned reserved refs: %w", err)
+	}
+	return refs, nil
+}
+
+// requeueReservedBatch re-queues a batch of reserved job refs in a single
+// write transaction. Each ref is re-checked: the job must still exist, be
+// in Reserved status, and be owned by the given worker. Stale or orphaned
+// reserved indexes are cleaned up.
+func requeueReservedBatch(database *badger.DB, workerID string, refs []reservedRef) error {
+	if len(refs) == 0 {
+		return nil
+	}
+
+	err := database.Update(func(txn *badger.Txn) error {
+		for _, ref := range refs {
+			jobItem, err := txn.Get(db.JobKey(ref.ulid))
+			if err != nil {
+				// Job record missing; delete orphaned reserved index.
+				_ = txn.Delete(db.ReservedIndexKey(ref.queue, ref.ulid))
+				continue
+			}
+
+			jobData, err := jobItem.ValueCopy(nil)
+			if err != nil {
+				continue
+			}
+
+			var j Job
+			if err := json.Unmarshal(jobData, &j); err != nil {
+				continue
+			}
+
+			// Re-check the job is still reserved and owned by this worker.
+			if j.Status != StatusReserved || j.WorkerID != workerID {
+				continue
+			}
+
+			// Re-queue: delete reserved index, write pending index, update job.
+			if err := txn.Delete(db.ReservedIndexKey(ref.queue, ref.ulid)); err != nil {
+				return fmt.Errorf("delete reserved index for %s: %w", ref.ulid, err)
+			}
+
+			j.Status = StatusPending
+			j.WorkerID = ""
+			updatedData, err := json.Marshal(j)
+			if err != nil {
+				return fmt.Errorf("marshal re-queued job %s: %w", ref.ulid, err)
+			}
+			if err := txn.Set(db.PendingIndexKey(ref.queue, ref.ulid), nil); err != nil {
+				return fmt.Errorf("set pending index for %s: %w", ref.ulid, err)
+			}
+			if err := txn.Set(db.JobKey(ref.ulid), updatedData); err != nil {
+				return fmt.Errorf("update job %s: %w", ref.ulid, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("requeue reserved batch: %w", err)
+	}
+	return nil
 }

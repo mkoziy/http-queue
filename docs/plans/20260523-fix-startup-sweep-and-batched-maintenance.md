@@ -32,21 +32,21 @@ Fix the review comments by preventing startup from expiring durable workers befo
 - Modify: `queue/sweep.go`
 - Modify: `queue/worker.go`
 
-- [ ] Introduce a small unexported maintenance batch size constant, e.g. `maintenanceBatchSize`, used by both worker deregistration and expired-reservation sweeping.
-- [ ] Add an unexported helper for slicing collected refs into bounded batches to avoid duplicating batching logic.
-- [ ] Keep batch helpers package-private and simple so they do not affect the public queue API.
-- [ ] Ensure all new code is gofmt-compatible and follows existing error wrapping style.
+- [x] Introduce a small unexported maintenance batch size constant, e.g. `maintenanceBatchSize`, used by both worker deregistration and expired-reservation sweeping.
+- [x] Add an unexported helper for slicing collected refs into bounded batches to avoid duplicating batching logic.
+- [x] Keep batch helpers package-private and simple so they do not affect the public queue API.
+- [x] Ensure all new code is gofmt-compatible and follows existing error wrapping style.
 
 ### Task 3: Batch Worker Deregistration Requeue Writes
 **Files:**
 - Modify: `queue/worker.go`
 - Modify: `queue/worker_test.go`
 
-- [ ] Refactor `DeregisterWorker` so it first loads the worker/token metadata, then collects worker-owned reserved job refs in a read transaction.
-- [ ] Re-queue owned reservations in bounded write transactions, re-checking each job still exists, is still reserved, and is still owned by the worker before mutating it.
-- [ ] Delete the worker record and token reverse index only after all reservation batches complete successfully, so a failed partial deregistration remains retryable.
-- [ ] Preserve cleanup of `workerLastSeen` and `flush:<id>` only after successful deregistration.
-- [ ] Add regression tests covering deregistration of many reserved jobs and confirming unrelated workers’ reservations remain untouched.
+- [x] Refactor `DeregisterWorker` so it first loads the worker/token metadata, then collects worker-owned reserved job refs in a read transaction.
+- [x] Re-queue owned reservations in bounded write transactions, re-checking each job still exists, is still reserved, and is still owned by the worker before mutating it.
+- [x] Delete the worker record and token reverse index only after all reservation batches complete successfully, so a failed partial deregistration remains retryable.
+- [x] Preserve cleanup of `workerLastSeen` and `flush:<id>` only after successful deregistration.
+- [x] Add regression tests covering deregistration of many reserved jobs and confirming unrelated workers’ reservations remain untouched.
 
 ### Task 4: Batch Expired Reservation Processing
 **Files:**
