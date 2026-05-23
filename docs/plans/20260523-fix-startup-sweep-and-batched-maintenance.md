@@ -22,10 +22,10 @@ Fix the review comments by preventing startup from expiring durable workers befo
 - Modify: `queue/sweep.go`
 - Modify: `queue/sweep_test.go`
 
-- [ ] Ensure `Sweeper.Start` performs only startup-safe maintenance immediately: expire reservations and reconciliation, but not `expireWorkers`.
-- [ ] Keep normal periodic ticks calling the full `sweep()` path, including worker expiry.
-- [ ] Add a regression test that creates a persisted worker with stale `LastSeen`, starts the sweeper with a long interval, and verifies the worker record and token index still exist after the immediate startup pass.
-- [ ] Add/adjust test assertions showing expired reservations are still handled by the immediate startup pass.
+- [x] Ensure `Sweeper.Start` performs only startup-safe maintenance immediately: expire reservations and reconciliation, but not `expireWorkers`.
+- [x] Keep normal periodic ticks calling the full `sweep()` path, including worker expiry.
+- [x] Add a regression test that creates a persisted worker with stale `LastSeen`, starts the sweeper with a long interval, and verifies the worker record and token index still exist after the immediate startup pass.
+- [x] Add/adjust test assertions showing expired reservations are still handled by the immediate startup pass.
 
 ### Task 2: Add Shared Batching Helpers
 **Files:**
