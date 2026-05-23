@@ -13,12 +13,9 @@ if ! command -v hurl &>/dev/null; then
   exit 1
 fi
 
-# --- Find a free port ---
-find_free_port() {
-  python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()"
-}
-PORT="$(find_free_port)"
-echo "Using port: $PORT"
+# --- Create a port communication file (Go server writes the actual port here when using :0) ---
+PORT_FILE="$(mktemp /tmp/http-queue-port.XXXXXX)"
+echo "Port file: $PORT_FILE"
 
 # --- Create temporary BadgerDB directory ---
 BADGER_TMPDIR="$(mktemp -d /tmp/http-queue-e2e.XXXXXX)"
@@ -31,7 +28,8 @@ echo "Run ID: $run_id"
 # --- E2E-specific config (fast timings, deterministic credentials) ---
 export ADMIN_USER="e2e-admin"
 export ADMIN_PASS="e2e-secret"
-export PORT="$PORT"
+export PORT="0"
+export PORT_FILE="$PORT_FILE"
 export BADGER_PATH="$BADGER_TMPDIR"
 export VISIBILITY_TIMEOUT="2s"
 export WORKER_EXPIRY="5s"
@@ -49,6 +47,10 @@ cleanup() {
     wait "$SERVER_PID" 2>/dev/null || true
     echo "Server process (PID $SERVER_PID) stopped."
   fi
+  if [ -n "${PORT_FILE:-}" ] && [ -f "$PORT_FILE" ]; then
+    rm -f "$PORT_FILE"
+    echo "Port file removed: $PORT_FILE"
+  fi
   if [ -d "$BADGER_TMPDIR" ]; then
     rm -rf "$BADGER_TMPDIR"
     echo "Temp BadgerDB directory removed: $BADGER_TMPDIR"
@@ -63,6 +65,28 @@ cd "$(dirname "$0")/.."
 go run . &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
+
+# --- Wait for the server to write its actual port ---
+echo -n "Waiting for server to report port..."
+ACTUAL_PORT=""
+for i in $(seq 1 30); do
+  if [ -f "$PORT_FILE" ]; then
+    ACTUAL_PORT=$(cat "$PORT_FILE" 2>/dev/null || true)
+    if [ -n "$ACTUAL_PORT" ]; then
+      echo " port $ACTUAL_PORT (attempt $i)"
+      break
+    fi
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo ""
+    echo "ERROR: Server did not report a port within 30 attempts."
+    exit 1
+  fi
+  sleep 0.5
+done
+
+# Override PORT with the actual port the server is listening on
+PORT="$ACTUAL_PORT"
 
 # --- Wait for server readiness ---
 echo -n "Waiting for server to be ready..."
@@ -88,7 +112,10 @@ if [ ! -d "$HURL_DIR" ]; then
   exit 1
 fi
 
+# Use nullglob so unmatched globs produce an empty array
+shopt -s nullglob
 HURL_FILES=("$HURL_DIR"/*.hurl)
+shopt -u nullglob
 if [ ${#HURL_FILES[@]} -eq 0 ]; then
   echo "ERROR: No *.hurl files found in '$HURL_DIR'."
   exit 1
