@@ -89,11 +89,11 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [ ] `WorkerByToken(db, plainToken string) (*Worker, error)` — hash token, seek `workertoken:{hash}` for worker-id, then load `worker:{id}`; O(1), no scan
 
 ### 6. Job store (`queue/job.go`)
-- [ ] `Job` struct: `ID`, `Queue`, `Payload json.RawMessage`, `Status`, `WorkerID`, `CreatedAt`, `Attempts int`
-- [ ] `ScheduleJob(db, queue string, payload json.RawMessage) (*Job, error)` — validate queue name (no `:`), write job + pending index in one txn
-- [ ] `ClaimNextJob(db, queue, workerID string, visibilityTimeout time.Duration) (*Job, error)` — prefix seek on pending index, increment `Attempts`, atomic claim with conflict retry (up to N retries); all three writes (delete pending index, write reserved index, update job record) in a single txn
-- [ ] `AckJob(db, jobID, workerID string) error` — verify worker owns it; delete reserved index + job record in one txn
-- [ ] `NackJob(db, jobID, workerID string) error` — verify worker owns it; if `Attempts >= MAX_ATTEMPTS` move to dead-letter (`queue:{queue}:dead:{ulid}`) else move reserved→pending index; all writes in one txn
+- [x] `Job` struct: `ID`, `Queue`, `Payload json.RawMessage`, `Status`, `WorkerID`, `CreatedAt`, `Attempts int`
+- [x] `ScheduleJob(db, queue string, payload json.RawMessage) (*Job, error)` — validate queue name (no `:`), write job + pending index in one txn
+- [x] `ClaimNextJob(db, queue, workerID string, visibilityTimeout time.Duration) (*Job, error)` — prefix seek on pending index, increment `Attempts`, atomic claim with conflict retry (up to N retries); all three writes (delete pending index, write reserved index, update job record) in a single txn
+- [x] `AckJob(db, jobID, workerID string) error` — verify worker owns it; delete reserved index + job record in one txn
+- [x] `NackJob(db, jobID, workerID string) error` — verify worker owns it; if `Attempts >= MAX_ATTEMPTS` move to dead-letter (`queue:{queue}:dead:{ulid}`) else move reserved→pending index; all writes in one txn
 
 ### 7. Sweep (`queue/sweep.go`)
 - [ ] `Sweeper` struct with db, cfg, logger
