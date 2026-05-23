@@ -200,13 +200,13 @@ POST   /jobs/{id}/nack
 - Modify: `api/workers.go`
 - Create: `api/worker_handlers_test.go`
 
-- [ ] Implement `GET /queues/{queue}/next` returning `200` with a claimed job or `204` when empty
-- [ ] Implement `POST /jobs/{id}/ack` returning `204` on successful acknowledgement
-- [ ] Implement `POST /jobs/{id}/nack` returning `204` on successful retry/dead-letter transition
-- [ ] Map invalid ownership, missing jobs, and malformed paths to appropriate HTTP errors
-- [ ] Add integration tests for claim, empty queue, ack, nack, unauthorized requests, and wrong-worker ownership
-- [ ] Run `go test -race ./api -run Worker`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Implement `GET /queues/{queue}/next` returning `200` with a claimed job or `204` when empty
+- [x] Implement `POST /jobs/{id}/ack` returning `204` on successful acknowledgement
+- [x] Implement `POST /jobs/{id}/nack` returning `204` on successful retry/dead-letter transition
+- [x] Map invalid ownership, missing jobs, and malformed paths to appropriate HTTP errors
+- [x] Add integration tests for claim, empty queue, ack, nack, unauthorized requests, and wrong-worker ownership
+- [x] Run `go test -race ./api -run Worker`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 11: Implement Router
 **Files:**
