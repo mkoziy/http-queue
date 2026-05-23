@@ -112,11 +112,11 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 **Files:**
 - Create: `tests/e2e/006-timeout-and-max-attempts.hurl`
 
-- [ ] Register a worker, schedule a job, claim it, and intentionally do not ack or nack it.
-- [ ] Wait long enough for the runner’s short `VISIBILITY_TIMEOUT` and `SWEEP_INTERVAL` to expire the reservation.
-- [ ] Claim again and assert the same job ID is returned with incremented attempts.
-- [ ] Nack or timeout the job until `MAX_ATTEMPTS` is reached.
-- [ ] Assert the job is no longer returned by `GET /queues/{{run_id}}-timeout/next`, proving it left the normal pending flow.
+- [x] Register a worker, schedule a job, claim it, and intentionally do not ack or nack it.
+- [x] Wait long enough for the runner’s short `VISIBILITY_TIMEOUT` and `SWEEP_INTERVAL` to expire the reservation.
+- [x] Claim again and assert the same job ID is returned with incremented attempts.
+- [x] Nack or timeout the job until `MAX_ATTEMPTS` is reached.
+- [x] Assert the job is no longer returned by `GET /queues/{{run_id}}-max-attempts/next`, proving it left the normal pending flow.
 
 ### Task 8: Document Local E2E Workflow
 
