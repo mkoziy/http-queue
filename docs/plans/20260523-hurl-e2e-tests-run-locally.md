@@ -77,11 +77,11 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 **Files:**
 - Create: `tests/e2e/003-multiple-workers-exclusive-claim.hurl`
 
-- [ ] Register two separate workers through `POST /workers` and capture both bearer tokens.
-- [ ] Schedule exactly one job through `POST /queues/{{run_id}}-multi-worker/jobs` and capture its job ID.
-- [ ] Claim the job with the first worker token and assert `200`, the captured job ID, the expected queue, payload, and `attempts == 1`.
-- [ ] Before acking or nacking the job, attempt to claim from the same queue with the second worker token and assert `204 No Content`.
-- [ ] Ack the job with the first worker token, then assert both workers receive `204 No Content` on subsequent claims from that queue.
+- [x] Register two separate workers through `POST /workers` and capture both bearer tokens.
+- [x] Schedule exactly one job through `POST /queues/{{run_id}}-multi-worker/jobs` and capture its job ID.
+- [x] Claim the job with the first worker token and assert `200`, the captured job ID, the expected queue, payload, and `attempts == 1`.
+- [x] Before acking or nacking the job, attempt to claim from the same queue with the second worker token and assert `204 No Content`.
+- [x] Ack the job with the first worker token, then assert both workers receive `204 No Content` on subsequent claims from that queue.
 
 ### Task 5: Add Auth And Validation Edge Tests
 
