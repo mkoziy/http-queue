@@ -59,10 +59,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# --- Start the server ---
-echo "Starting server..."
+# --- Build and start the server ---
+echo "Building server..."
 cd "$(dirname "$0")/.."
-go run . &
+BIN_PATH="$BADGER_TMPDIR/http-queue-e2e"
+go build -o "$BIN_PATH" .
+echo "Starting server..."
+"$BIN_PATH" &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
