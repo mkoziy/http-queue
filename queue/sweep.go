@@ -159,19 +159,45 @@ func (s *Sweeper) expireReservations() {
 				// Move to dead-letter.
 				job.Status = StatusDead
 				job.WorkerID = ""
-				updatedData, _ := json.Marshal(job)
-				_ = txn.Delete(item.Key())
-				_ = txn.Set(db.DeadIndexKey(queueName, ulidStr), nil)
-				_ = txn.Set(db.JobKey(ulidStr), updatedData)
+				updatedData, err := json.Marshal(job)
+				if err != nil {
+					log.Printf("sweep: marshal dead job %s: %v", ulidStr, err)
+					continue
+				}
+				if err := txn.Delete(item.Key()); err != nil {
+					log.Printf("sweep: delete reserved index for dead job %s: %v", ulidStr, err)
+					continue
+				}
+				if err := txn.Set(db.DeadIndexKey(queueName, ulidStr), nil); err != nil {
+					log.Printf("sweep: set dead index for job %s: %v", ulidStr, err)
+					continue
+				}
+				if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
+					log.Printf("sweep: update dead job %s: %v", ulidStr, err)
+					continue
+				}
 				log.Printf("sweep: job %s moved to dead-letter (max attempts)", ulidStr)
 			} else {
 				// Re-queue.
 				job.Status = StatusPending
 				job.WorkerID = ""
-				updatedData, _ := json.Marshal(job)
-				_ = txn.Delete(item.Key())
-				_ = txn.Set(db.PendingIndexKey(queueName, ulidStr), nil)
-				_ = txn.Set(db.JobKey(ulidStr), updatedData)
+				updatedData, err := json.Marshal(job)
+				if err != nil {
+					log.Printf("sweep: marshal re-queued job %s: %v", ulidStr, err)
+					continue
+				}
+				if err := txn.Delete(item.Key()); err != nil {
+					log.Printf("sweep: delete expired reserved index for job %s: %v", ulidStr, err)
+					continue
+				}
+				if err := txn.Set(db.PendingIndexKey(queueName, ulidStr), nil); err != nil {
+					log.Printf("sweep: set pending index for re-queued job %s: %v", ulidStr, err)
+					continue
+				}
+				if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
+					log.Printf("sweep: update re-queued job %s: %v", ulidStr, err)
+					continue
+				}
 				log.Printf("sweep: job %s re-queued (visibility timeout expired)", ulidStr)
 			}
 		}
@@ -210,18 +236,29 @@ func (s *Sweeper) reconcile() {
 					// Orphaned reserved job; re-queue as pending.
 					job.Status = StatusPending
 					job.WorkerID = ""
-					updatedData, _ := json.Marshal(job)
-					_ = txn.Set(db.JobKey(job.ID), updatedData)
-					_ = txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil)
-					log.Printf("sweep: reconciled orphaned reserved job %s -> pending", job.ID)
+					updatedData, err := json.Marshal(job)
+					if err != nil {
+						log.Printf("sweep: marshal reconciled job %s: %v", job.ID, err)
+						continue
+					}
+					if err := txn.Set(db.JobKey(job.ID), updatedData); err != nil {
+						log.Printf("sweep: set reconciled job %s: %v", job.ID, err)
+					} else if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
+						log.Printf("sweep: set reconciled pending index for job %s: %v", job.ID, err)
+					} else {
+						log.Printf("sweep: reconciled orphaned reserved job %s -> pending", job.ID)
+					}
 				}
 			case StatusPending:
 				// Verify pending index exists.
 				_, err := txn.Get(db.PendingIndexKey(job.Queue, job.ID))
 				if err != nil {
 					// Re-create missing pending index.
-					_ = txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil)
-					log.Printf("sweep: reconciled missing pending index for job %s", job.ID)
+					if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
+						log.Printf("sweep: set missing pending index for job %s: %v", job.ID, err)
+					} else {
+						log.Printf("sweep: reconciled missing pending index for job %s", job.ID)
+					}
 				}
 			}
 		}
@@ -255,8 +292,11 @@ func (s *Sweeper) reconcile() {
 			_, err := txn.Get(db.JobKey(ulidStr))
 			if err != nil {
 				// Phantom index; delete it.
-				_ = txn.Delete(item.Key())
-				log.Printf("sweep: removed phantom pending index %s", key)
+				if err := txn.Delete(item.Key()); err != nil {
+					log.Printf("sweep: delete phantom pending index %s: %v", key, err)
+				} else {
+					log.Printf("sweep: removed phantom pending index %s", key)
+				}
 			}
 		}
 		return nil

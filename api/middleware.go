@@ -13,7 +13,6 @@ import (
 
 	"github.com/mkoziy/http-queue/config"
 	"github.com/mkoziy/http-queue/queue"
-	"github.com/mkoziy/http-queue/token"
 )
 
 // contextKey is a private type for context keys to avoid collisions.
@@ -66,10 +65,7 @@ func BearerAuth(database *badger.DB, debounce time.Duration) func(http.Handler) 
 			}
 
 			plainToken := authHeader[7:]
-
-			// Quick validation: ensure it looks like a valid base64url token.
-			hashed := token.Hash(plainToken)
-			if hashed == "" {
+			if plainToken == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

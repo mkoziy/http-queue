@@ -3,6 +3,7 @@ package queue
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -138,13 +139,22 @@ func DeregisterWorker(database *badger.DB, id string) error {
 			}
 
 			// Re-queue: delete reserved index, write pending index, update job.
-			_ = txn.Delete(item.Key())
+			if err := txn.Delete(item.Key()); err != nil {
+				return fmt.Errorf("delete reserved index: %w", err)
+			}
 
 			job.Status = StatusPending
 			job.WorkerID = ""
-			updatedData, _ := json.Marshal(job)
-			_ = txn.Set(db.PendingIndexKey(queueName, ulidStr), nil)
-			_ = txn.Set(db.JobKey(ulidStr), updatedData)
+			updatedData, err := json.Marshal(job)
+			if err != nil {
+				return fmt.Errorf("marshal re-queued job: %w", err)
+			}
+			if err := txn.Set(db.PendingIndexKey(queueName, ulidStr), nil); err != nil {
+				return fmt.Errorf("set pending index: %w", err)
+			}
+			if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
+				return fmt.Errorf("update job: %w", err)
+			}
 		}
 
 		// Delete token reverse index.
@@ -186,7 +196,7 @@ func TouchWorker(database *badger.DB, id string, debounce time.Duration) {
 	}
 
 	// Flush to BadgerDB.
-	_ = database.Update(func(txn *badger.Txn) error {
+	if err := database.Update(func(txn *badger.Txn) error {
 		item, err := txn.Get(db.WorkerKey(id))
 		if err != nil {
 			return fmt.Errorf("get worker: %w", err)
@@ -210,7 +220,11 @@ func TouchWorker(database *badger.DB, id string, debounce time.Duration) {
 		}
 
 		return txn.Set(db.WorkerKey(id), updated)
-	})
+	}); err != nil {
+		// Log but don't fail — the in-memory cache is still up-to-date
+		// and the next debounce cycle will retry.
+		log.Printf("touch worker %s: flush to db: %v", id, err)
+	}
 
 	// Record flush time.
 	workerLastSeen.Store("flush:"+id, now)
