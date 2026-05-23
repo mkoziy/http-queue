@@ -11,13 +11,13 @@ Implement the Go HTTP queue engine described in `docs/plans/20260521-http-queue.
 - `docs/plans/20260521-http-queue.md` defines the original queue architecture, storage layout, API surface, and task outline.
 
 ## Success Criteria
-- [ ] Admin users can register/deregister workers and schedule jobs through HTTP endpoints using Basic Auth credentials from environment/config only
-- [ ] Workers can claim, ack, and nack jobs using bearer-token authentication
-- [ ] Expired reservations and expired workers are reconciled by the sweeper
-- [ ] Jobs exceeding max attempts move to a dead-letter index
-- [ ] `make test` passes
-- [ ] `make lint` passes
-- [ ] `make build` passes
+- [x] Admin users can register/deregister workers and schedule jobs through HTTP endpoints using Basic Auth credentials from environment/config only
+- [x] Workers can claim, ack, and nack jobs using bearer-token authentication
+- [x] Expired reservations and expired workers are reconciled by the sweeper
+- [x] Jobs exceeding max attempts move to a dead-letter index
+- [x] `make test` passes
+- [x] `make lint` passes
+- [x] `make build` passes
 
 ## Design Decisions
 - Use BadgerDB only for queue state, jobs, worker records, worker token hashes, and indexes.
@@ -48,12 +48,12 @@ workertoken:{sha256-hex}          → worker-id
 ```
 
 ## Invariants
-- [ ] Queue names must not contain `:`
-- [ ] Every pending index key must correspond to a `status=pending` job record
-- [ ] Every reserved index key must correspond to a `status=reserved` job record
-- [ ] Claim, ack, nack, registration, and deregistration state changes must be transactional
-- [ ] Worker bearer tokens must only be stored as hashes
-- [ ] Admin Basic Auth credentials must only come from `config.Config` loaded from environment variables and must never be persisted
+- [x] Queue names must not contain `:`
+- [x] Every pending index key must correspond to a `status=pending` job record
+- [x] Every reserved index key must correspond to a `status=reserved` job record
+- [x] Claim, ack, nack, registration, and deregistration state changes must be transactional
+- [x] Worker bearer tokens must only be stored as hashes
+- [x] Admin Basic Auth credentials must only come from `config.Config` loaded from environment variables and must never be persisted
 
 ## API Surface
 ```text
@@ -238,22 +238,22 @@ POST   /jobs/{id}/nack
 **Files:**
 - Create: `README.md`
 
-- [ ] Document project purpose and architecture
-- [ ] Add environment variable table with defaults, explicitly listing `ADMIN_USER` and `ADMIN_PASS` as the source of admin Basic Auth credentials
-- [ ] State that admin credentials are not stored in BadgerDB and must be supplied by the runtime environment
-- [ ] Add curl examples for scheduling jobs, registering workers, claiming, acking, and nacking using placeholder admin credentials
-- [ ] Document `make lint`, `make test`, `make build`, and `make run`
-- [ ] Include notes about worker tokens, visibility timeout, retries, and dead-letter behavior
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Document project purpose and architecture
+- [x] Add environment variable table with defaults, explicitly listing `ADMIN_USER` and `ADMIN_PASS` as the source of admin Basic Auth credentials
+- [x] State that admin credentials are not stored in BadgerDB and must be supplied by the runtime environment
+- [x] Add curl examples for scheduling jobs, registering workers, claiming, acking, and nacking using placeholder admin credentials
+- [x] Document `make lint`, `make test`, `make build`, and `make run`
+- [x] Include notes about worker tokens, visibility timeout, retries, and dead-letter behavior
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 14: Final Verification
 **Files:**
 - Modify: `docs/plans/20260521-http-queue.md`
 
-- [ ] Update the implementation plan checkboxes to reflect completed work
-- [ ] Ensure docs clearly distinguish admin Basic Auth env credentials from persisted worker bearer token hashes
-- [ ] Run `go mod tidy`
-- [ ] Run `make test`
-- [ ] Run `make lint` and require a green linter before continuing
-- [ ] Run `make build`
-- [ ] Manually smoke-test the HTTP API with the README curl flow using a temporary BadgerDB directory and temporary `ADMIN_USER` / `ADMIN_PASS` values
+- [x] Update the implementation plan checkboxes to reflect completed work
+- [x] Ensure docs clearly distinguish admin Basic Auth env credentials from persisted worker bearer token hashes
+- [x] Run `go mod tidy`
+- [x] Run `make test`
+- [x] Run `make lint` and require a green linter before continuing
+- [x] Run `make build`
+- [x] Manually smoke-test the HTTP API with the README curl flow using a temporary BadgerDB directory and temporary `ADMIN_USER` / `ADMIN_PASS` values
