@@ -11,6 +11,9 @@ import (
 // ErrMissingAdminCredentials is returned when ADMIN_USER or ADMIN_PASS is not set.
 var ErrMissingAdminCredentials = errors.New("ADMIN_USER and ADMIN_PASS must be set")
 
+// ErrInvalidSweepInterval is returned when SWEEP_INTERVAL is not positive.
+var ErrInvalidSweepInterval = errors.New("SWEEP_INTERVAL must be greater than 0")
+
 // Config holds all runtime configuration for the HTTP queue engine.
 type Config struct {
 	Port string
@@ -70,6 +73,10 @@ func Load() (*Config, error) {
 
 	if cfg.AdminUser == "" || cfg.AdminPass == "" {
 		return nil, ErrMissingAdminCredentials
+	}
+
+	if cfg.SweepInterval <= 0 {
+		return nil, ErrInvalidSweepInterval
 	}
 
 	return cfg, nil

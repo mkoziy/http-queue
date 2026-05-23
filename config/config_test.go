@@ -318,6 +318,38 @@ func TestEnvInt_NotSet(t *testing.T) {
 	}
 }
 
+func TestLoad_InvalidSweepInterval_Zero(t *testing.T) {
+	defer clearEnv(t)()
+
+	setenv(t, "ADMIN_USER", "admin")
+	setenv(t, "ADMIN_PASS", "secret")
+	setenv(t, "SWEEP_INTERVAL", "0s")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for zero SWEEP_INTERVAL, got nil")
+	}
+	if !errors.Is(err, ErrInvalidSweepInterval) {
+		t.Errorf("Load() error = %v, want ErrInvalidSweepInterval", err)
+	}
+}
+
+func TestLoad_InvalidSweepInterval_Negative(t *testing.T) {
+	defer clearEnv(t)()
+
+	setenv(t, "ADMIN_USER", "admin")
+	setenv(t, "ADMIN_PASS", "secret")
+	setenv(t, "SWEEP_INTERVAL", "-1s")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error for negative SWEEP_INTERVAL, got nil")
+	}
+	if !errors.Is(err, ErrInvalidSweepInterval) {
+		t.Errorf("Load() error = %v, want ErrInvalidSweepInterval", err)
+	}
+}
+
 func TestLoad_AdminUserWhitespace(t *testing.T) {
 	// Leading/trailing whitespace is NOT stripped; this is intentional
 	// to avoid hiding configuration mistakes.
