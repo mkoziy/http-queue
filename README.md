@@ -295,7 +295,7 @@ Or invoke the runner directly:
    | `MAX_ATTEMPTS` | `3` | Low threshold for dead-letter testing |
    | `LAST_SEEN_DEBOUNCE` | `100ms` | Minimal debounce for fast polling |
 
-5. **Starts the Go server** in the background (`go run .`).
+5. **Builds and starts the Go server** in the background (compiled binary for clean teardown).
 6. **Waits for readiness** by polling `POST /workers` (expects `401` when the server is reachable — no health endpoint needed).
 7. **Runs all `*.hurl` files** in `tests/e2e/` via `hurl --test`, passing `base_url` and `run_id` as variables.
 8. **Cleans up** — kills the server process and removes the temporary BadgerDB directory, regardless of success or failure.
