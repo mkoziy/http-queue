@@ -304,7 +304,7 @@ Each Hurl file uses `{{base_url}}` (e.g. `http://127.0.0.1:34821`) and `{{run_id
 
 > **Note:** The test runner uses `VISIBILITY_TIMEOUT=2s` and `SWEEP_INTERVAL=1s`. The timeout-requeue test (`006-timeout-and-max-attempts.hurl`) waits up to 5s with retries, so these values keep the suite fast (~10–15s total).
 
-## Debugging E2E Tests
+#### Debugging E2E Tests
 
 If a test fails, the runner prints Hurl's detailed diff output. You can also run a single test file interactively:
 
