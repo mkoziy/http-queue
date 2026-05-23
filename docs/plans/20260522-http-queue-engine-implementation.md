@@ -119,26 +119,26 @@ POST   /jobs/{id}/nack
 - Modify: `token/token.go`
 - Create: `token/token_test.go`
 
-- [ ] Implement `Generate() (plain string, hashed string, err error)` using `crypto/rand`
-- [ ] Implement `Hash(plain string) string` using SHA-256 hex encoding
-- [ ] Implement `Verify(plain, hashed string) bool` using constant-time comparison
-- [ ] Add tests for token uniqueness, hash verification, and failed verification
-- [ ] Run `go test -race ./token`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Implement `Generate() (plain string, hashed string, err error)` using `crypto/rand`
+- [x] Implement `Hash(plain string) string` using SHA-256 hex encoding
+- [x] Implement `Verify(plain, hashed string) bool` using constant-time comparison
+- [x] Add tests for token uniqueness, hash verification, and failed verification
+- [x] Run `go test -race ./token`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 5: Implement Worker Store
 **Files:**
 - Modify: `queue/worker.go`
 - Create: `queue/worker_test.go`
 
-- [ ] Add `Worker` struct with `ID`, `TokenHash`, `LastSeen`, and `RegisteredAt`
-- [ ] Implement worker registration with both `worker:{id}` and `workertoken:{hash}` writes in one transaction
-- [ ] Implement worker deregistration: scan and requeue the worker's reserved jobs, then delete both worker and token-index keys
-- [ ] Implement `WorkerByToken` using the reverse index without scanning workers
-- [ ] Implement debounced `TouchWorker` using in-memory last-seen tracking plus BadgerDB persistence
-- [ ] Add tests for register, lookup by token, deregister cleanup, invalid token, and last-seen debounce
-- [ ] Run `go test -race ./queue -run Worker`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Add `Worker` struct with `ID`, `TokenHash`, `LastSeen`, and `RegisteredAt`
+- [x] Implement worker registration with both `worker:{id}` and `workertoken:{hash}` writes in one transaction
+- [x] Implement worker deregistration: scan and requeue the worker's reserved jobs, then delete both worker and token-index keys
+- [x] Implement `WorkerByToken` using the reverse index without scanning workers
+- [x] Implement debounced `TouchWorker` using in-memory last-seen tracking plus BadgerDB persistence
+- [x] Add tests for register, lookup by token, deregister cleanup, invalid token, and last-seen debounce
+- [x] Run `go test -race ./queue -run Worker`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 6: Implement Job Store
 **Files:**
