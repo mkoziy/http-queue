@@ -88,12 +88,12 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 **Files:**
 - Create: `tests/e2e/004-auth-and-validation.hurl`
 
-- [ ] Assert admin endpoints return `401` without Basic Auth.
-- [ ] Assert admin endpoints return `401` with wrong Basic Auth credentials.
-- [ ] Assert worker endpoints return `401` without bearer auth.
-- [ ] Assert worker endpoints return `401` with an invalid bearer token.
-- [ ] Assert invalid job JSON returns `400` with a JSON error response.
-- [ ] Assert an invalid queue name containing `:` returns `400` with a JSON error response.
+- [x] Assert admin endpoints return `401` without Basic Auth.
+- [x] Assert admin endpoints return `401` with wrong Basic Auth credentials.
+- [x] Assert worker endpoints return `401` without bearer auth.
+- [x] Assert worker endpoints return `401` with an invalid bearer token.
+- [x] Assert invalid job JSON returns `400` with a JSON error response.
+- [x] Assert an invalid queue name containing `:` returns `400` with a JSON error response.
 
 ### Task 6: Add Ownership And Deregistration Edge Tests
 
