@@ -66,11 +66,11 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 **Files:**
 - Create: `tests/e2e/002-nack-reclaim.hurl`
 
-- [ ] Register a worker and schedule a job in an isolated queue.
-- [ ] Claim the job and capture its ID.
-- [ ] Nack the job with `POST /jobs/{{job_id}}/nack` and assert `204`.
-- [ ] Claim the same job again and assert the ID matches the original job and `attempts == 2`.
-- [ ] Ack the reclaimed job and assert the queue returns `204 No Content` afterward.
+- [x] Register a worker and schedule a job in an isolated queue.
+- [x] Claim the job and capture its ID.
+- [x] Nack the job with `POST /jobs/{{job_id}}/nack` and assert `204`.
+- [x] Claim the same job again and assert the ID matches the original job and `attempts == 2`.
+- [x] Ack the reclaimed job and assert the queue returns `204 No Content` afterward.
 
 ### Task 4: Add Multiple Workers Exclusive Claim Test
 

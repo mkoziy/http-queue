@@ -25,9 +25,9 @@ jsonpath "$.token" isString
 # ─── Step 2: Schedule a job ─────────────────────────────────────────────────
 # Admin endpoint — requires valid Basic Auth.
 POST {{base_url}}/queues/{{run_id}}-happy/jobs
+Content-Type: application/json
 [BasicAuth]
 e2e-admin:e2e-secret
-Content-Type: application/json
 
 { "payload": { "hello": "world" } }
 HTTP 201
