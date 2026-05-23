@@ -100,12 +100,12 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 **Files:**
 - Create: `tests/e2e/005-ownership-and-deregister.hurl`
 
-- [ ] Register two workers and schedule one job in an isolated queue.
-- [ ] Claim the job with worker A and capture the job ID.
-- [ ] Assert worker B cannot ack worker A’s reserved job and receives `400`.
-- [ ] Assert worker B cannot nack worker A’s reserved job and receives `400`.
-- [ ] Deregister worker A through `DELETE /workers/{{worker_a_id}}` using Basic Auth.
-- [ ] Assert worker B can then claim the same job ID because deregistration requeued worker A’s reservation.
+- [x] Register two workers and schedule one job in an isolated queue.
+- [x] Claim the job with worker A and capture the job ID.
+- [x] Assert worker B cannot ack worker A’s reserved job and receives `400`.
+- [x] Assert worker B cannot nack worker A’s reserved job and receives `400`.
+- [x] Deregister worker A through `DELETE /workers/{{worker_a_id}}` using Basic Auth.
+- [x] Assert worker B can then claim the same job ID because deregistration requeued worker A’s reservation.
 
 ### Task 7: Add Visibility Timeout And Max Attempts Edge Tests
 
