@@ -188,12 +188,12 @@ POST   /jobs/{id}/nack
 - Modify: `api/workers.go`
 - Create: `api/admin_handlers_test.go`
 
-- [ ] Implement `POST /queues/{queue}/jobs` to decode `{"payload": ...}` and return `201` with job ID
-- [ ] Implement `POST /workers` to register a worker and return `201` with worker ID and plain token
-- [ ] Implement `DELETE /workers/{id}` to deregister a worker and return `204`
-- [ ] Add integration tests using real BadgerDB in `t.TempDir()` and synthetic Basic Auth env/config values
-- [ ] Run `go test -race ./api -run Admin`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Implement `POST /queues/{queue}/jobs` to decode `{"payload": ...}` and return `201` with job ID
+- [x] Implement `POST /workers` to register a worker and return `201` with worker ID and plain token
+- [x] Implement `DELETE /workers/{id}` to deregister a worker and return `204`
+- [x] Add integration tests using real BadgerDB in `t.TempDir()` and synthetic Basic Auth env/config values
+- [x] Run `go test -race ./api -run Admin`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 10: Implement Worker Handlers
 **Files:**

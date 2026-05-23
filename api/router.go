@@ -32,13 +32,13 @@ func New(database *badger.DB, cfg *config.Config) http.Handler {
 	bearerAuth := BearerAuth(database, cfg.LastSeenDebounce)
 
 	// GET /queues/{queue}/next
-	mux.Handle("GET /queues/{queue}/next", bearerAuth(http.HandlerFunc(jobsHandler.HandleClaimNextJob)))
+	mux.Handle("GET /queues/{queue}/next", bearerAuth(http.HandlerFunc(workersHandler.HandleClaimNextJob)))
 
 	// POST /jobs/{id}/ack
-	mux.Handle("POST /jobs/{id}/ack", bearerAuth(http.HandlerFunc(jobsHandler.HandleAckJob)))
+	mux.Handle("POST /jobs/{id}/ack", bearerAuth(http.HandlerFunc(workersHandler.HandleAckJob)))
 
 	// POST /jobs/{id}/nack
-	mux.Handle("POST /jobs/{id}/nack", bearerAuth(http.HandlerFunc(jobsHandler.HandleNackJob)))
+	mux.Handle("POST /jobs/{id}/nack", bearerAuth(http.HandlerFunc(workersHandler.HandleNackJob)))
 
 	// Wrap with logging.
 	return Logger(mux)
