@@ -123,6 +123,93 @@ func deleteKey(t *testing.T, database *badger.DB, key []byte) {
 	}
 }
 
+// verifyJobInvariants checks that a job's backing indexes and fields are
+// consistent with its status. This is a post-maintenance invariant check.
+func verifyJobInvariants(t *testing.T, database *badger.DB, jobID, queue string) {
+	t.Helper()
+
+	var j Job
+	err := database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(jobID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(data, &j)
+	})
+	if err != nil {
+		t.Fatalf("read job %s for invariant check: %v", jobID, err)
+	}
+
+	switch j.Status {
+	case StatusPending:
+		// Must have pending index.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.PendingIndexKey(queue, jobID))
+			return err
+		}); err != nil {
+			t.Errorf("invariant: pending job %s missing pending index", jobID)
+		}
+		// Must NOT have reserved index.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey(queue, jobID))
+			return err
+		}); err == nil {
+			t.Errorf("invariant: pending job %s has stale reserved index", jobID)
+		}
+		// Must NOT have WorkerID set.
+		if j.WorkerID != "" {
+			t.Errorf("invariant: pending job %s has WorkerID=%q, want empty", jobID, j.WorkerID)
+		}
+
+	case StatusReserved:
+		// Must have reserved index.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey(queue, jobID))
+			return err
+		}); err != nil {
+			t.Errorf("invariant: reserved job %s missing reserved index", jobID)
+		}
+		// Must NOT have pending index.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.PendingIndexKey(queue, jobID))
+			return err
+		}); err == nil {
+			t.Errorf("invariant: reserved job %s has stale pending index", jobID)
+		}
+		// Must have WorkerID set.
+		if j.WorkerID == "" {
+			t.Errorf("invariant: reserved job %s has empty WorkerID", jobID)
+		}
+
+	case StatusDead:
+		// Must have dead index.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.DeadIndexKey(queue, jobID))
+			return err
+		}); err != nil {
+			t.Errorf("invariant: dead job %s missing dead index", jobID)
+		}
+		// Must NOT have reserved index.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey(queue, jobID))
+			return err
+		}); err == nil {
+			t.Errorf("invariant: dead job %s has stale reserved index", jobID)
+		}
+		// Must NOT have WorkerID set.
+		if j.WorkerID != "" {
+			t.Errorf("invariant: dead job %s has WorkerID=%q, want empty", jobID, j.WorkerID)
+		}
+
+	default:
+		t.Errorf("invariant: job %s has unknown status %q", jobID, j.Status)
+	}
+}
+
 // ---- NewSweeper ----
 
 func TestNewSweeper(t *testing.T) {
@@ -1224,6 +1311,105 @@ func TestSweeper_Start_DoesNotExpireWorkersOnStartup(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("reserved index should be gone after startup sweep expired reservation")
+	}
+}
+
+// ---- Sweep + Deregister Race ----
+
+func TestSweep_ExpiredReservation_DeregisterRace(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+	cfg.VisibilityTimeout = 10 * time.Second
+
+	// Register a worker.
+	workerID, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	// Schedule and claim enough jobs to spread across multiple maintenance batches.
+	const numJobs = maintenanceBatchSize + 15
+	jobIDs := make([]string, 0, numJobs)
+
+	for i := 0; i < numJobs; i++ {
+		_, err := ScheduleJob(database, "racequeue", json.RawMessage(`{"n":`+fmt.Sprintf("%d", i)+`}`))
+		if err != nil {
+			t.Fatalf("ScheduleJob %d: %v", i, err)
+		}
+		claimed, err := ClaimNextJob(database, "racequeue", workerID, cfg.VisibilityTimeout)
+		if err != nil {
+			t.Fatalf("ClaimNextJob %d: %v", i, err)
+		}
+		if claimed == nil {
+			t.Fatalf("ClaimNextJob %d returned nil", i)
+		}
+		jobIDs = append(jobIDs, claimed.ID)
+	}
+
+	// Expire all reservations so both expireReservations and deregister
+	// will find work to do on the same jobs.
+	for _, id := range jobIDs {
+		setReservedExpiry(t, database, "racequeue", id, time.Now().UTC().Add(-1*time.Hour))
+	}
+
+	// Run deregistration and reservation expiry concurrently.
+	sweeper := NewSweeper(database, cfg)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		_ = DeregisterWorker(database, workerID)
+	}()
+
+	go func() {
+		defer wg.Done()
+		sweeper.expireReservations()
+	}()
+
+	wg.Wait()
+
+	// Every job must be in a consistent state: if the job record still exists
+	// it must be pending with no WorkerID and valid indexes. The job may also
+	// have been deleted (ack is not possible here, but we handle it gracefully).
+	for _, id := range jobIDs {
+		var j Job
+		err := database.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(db.JobKey(id))
+			if err != nil {
+				return err
+			}
+			data, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(data, &j)
+		})
+		if err != nil {
+			// Job record deleted — valid outcome (though unlikely here).
+			continue
+		}
+		if j.Status != StatusPending {
+			t.Errorf("job %s status after race = %q, want %q", id, j.Status, StatusPending)
+		}
+		if j.WorkerID != "" {
+			t.Errorf("job %s WorkerID after race = %q, want empty", id, j.WorkerID)
+		}
+		// Full invariant check.
+		verifyJobInvariants(t, database, id, "racequeue")
+	}
+
+	// Verify no reserved indexes remain for any of the race jobs.
+	for _, id := range jobIDs {
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey("racequeue", id))
+			return err
+		}); err == nil {
+			t.Errorf("stale reserved index for job %s after race", id)
+		}
 	}
 }
 

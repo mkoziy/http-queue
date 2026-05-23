@@ -10,12 +10,12 @@ Fix the review comments by preventing startup from expiring durable workers befo
 - Verification commands used by the project are `go test -race ./...` and `make lint`.
 
 ## Success Criteria
-- [ ] Startup sweeper does not delete workers whose durable `LastSeen` is older than `WORKER_EXPIRY` until at least the first scheduled sweep tick.
-- [ ] `DeregisterWorker` re-queues large numbers of worker-owned reserved jobs through bounded Badger write transactions.
-- [ ] Expired reservation cleanup processes large backlogs through bounded Badger write transactions and leaves no expired reservations stuck because of transaction size.
-- [ ] `go test -race ./queue` passes.
-- [ ] `go test -race ./...` passes.
-- [ ] `make lint` passes, if `golangci-lint` is installed in the environment.
+- [x] Startup sweeper does not delete workers whose durable `LastSeen` is older than `WORKER_EXPIRY` until at least the first scheduled sweep tick.
+- [x] `DeregisterWorker` re-queues large numbers of worker-owned reserved jobs through bounded Badger write transactions.
+- [x] Expired reservation cleanup processes large backlogs through bounded Badger write transactions and leaves no expired reservations stuck because of transaction size.
+- [x] `go test -race ./queue` passes.
+- [x] `go test -race ./...` passes.
+- [x] `make lint` passes, if `golangci-lint` is installed in the environment.
 
 ### Task 1: Protect Workers During Startup Sweep
 **Files:**
@@ -64,8 +64,8 @@ Fix the review comments by preventing startup from expiring durable workers befo
 - Modify: `queue/sweep_test.go`
 - Modify: `queue/worker_test.go`
 
-- [ ] Add invariant checks after batched operations: no stale reserved indexes, expected pending/dead indexes exist, and job `WorkerID` is cleared.
-- [ ] Add or update race-oriented tests to verify concurrent ack/sweep and deregister/sweep outcomes remain consistent.
-- [ ] Run `go test -race ./queue` and fix any failing queue tests.
-- [ ] Run `go test -race ./...` and fix any package-wide regressions.
-- [ ] Run `make lint` if available and address lint findings.
+- [x] Add invariant checks after batched operations: no stale reserved indexes, expected pending/dead indexes exist, and job `WorkerID` is cleared.
+- [x] Add or update race-oriented tests to verify concurrent ack/sweep and deregister/sweep outcomes remain consistent.
+- [x] Run `go test -race ./queue` and fix any failing queue tests.
+- [x] Run `go test -race ./...` and fix any package-wide regressions.
+- [x] Run `make lint` if available and address lint findings.
