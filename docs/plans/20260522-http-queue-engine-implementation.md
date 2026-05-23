@@ -145,28 +145,28 @@ POST   /jobs/{id}/nack
 - Modify: `queue/job.go`
 - Create: `queue/job_test.go`
 
-- [ ] Add `Job` struct with `ID`, `Queue`, `Payload`, `Status`, `WorkerID`, `CreatedAt`, and `Attempts`
-- [ ] Implement `ScheduleJob` to validate queue names and write job plus pending index atomically
-- [ ] Implement `ClaimNextJob` using pending prefix seek, atomic pending-to-reserved transition, attempt increment, and bounded conflict retry
-- [ ] Implement `AckJob` with worker ownership validation and atomic reserved-index plus job deletion
-- [ ] Implement `NackJob` with worker ownership validation, retry handling, and dead-letter movement at max attempts
-- [ ] Add tests for schedule, claim, ack, nack, double-claim race, max-attempt dead-lettering, and invalid queue names
-- [ ] Run `go test -race ./queue -run Job`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Add `Job` struct with `ID`, `Queue`, `Payload`, `Status`, `WorkerID`, `CreatedAt`, and `Attempts`
+- [x] Implement `ScheduleJob` to validate queue names and write job plus pending index atomically
+- [x] Implement `ClaimNextJob` using pending prefix seek, atomic pending-to-reserved transition, attempt increment, and bounded conflict retry
+- [x] Implement `AckJob` with worker ownership validation and atomic reserved-index plus job deletion
+- [x] Implement `NackJob` with worker ownership validation, retry handling, and dead-letter movement at max attempts
+- [x] Add tests for schedule, claim, ack, nack, double-claim race, max-attempt dead-lettering, and invalid queue names
+- [x] Run `go test -race ./queue -run Job`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 7: Implement Reservation and Worker Sweeper
 **Files:**
 - Modify: `queue/sweep.go`
 - Create: `queue/sweep_test.go`
 
-- [ ] Add `Sweeper` type with BadgerDB, config, and logger dependencies
-- [ ] Implement `Start(ctx context.Context)` with ticker lifecycle and context cancellation
-- [ ] Implement expired worker deletion including token reverse-index cleanup
-- [ ] Implement expired reservation requeue/dead-letter transitions in single transactions, including reservations whose owner worker no longer exists (belt-and-suspenders for deregistered workers)
-- [ ] Implement reconciliation for reserved-job orphans (no matching worker OR no matching reserved index) and phantom pending index keys
-- [ ] Add tests for expired reservations, expired workers, deregistered-worker orphan jobs, phantom pending indexes, and sweep/claim races
-- [ ] Run `go test -race ./queue -run Sweep`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Add `Sweeper` type with BadgerDB, config, and logger dependencies
+- [x] Implement `Start(ctx context.Context)` with ticker lifecycle and context cancellation
+- [x] Implement expired worker deletion including token reverse-index cleanup
+- [x] Implement expired reservation requeue/dead-letter transitions in single transactions, including reservations whose owner worker no longer exists (belt-and-suspenders for deregistered workers)
+- [x] Implement reconciliation for reserved-job orphans (no matching worker OR no matching reserved index) and phantom pending index keys
+- [x] Add tests for expired reservations, expired workers, deregistered-worker orphan jobs, phantom pending indexes, and sweep/claim races
+- [x] Run `go test -race ./queue -run Sweep`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 8: Implement HTTP Middleware
 **Files:**

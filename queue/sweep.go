@@ -3,8 +3,8 @@ package queue
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -118,15 +118,8 @@ func (s *Sweeper) expireReservations() {
 				continue
 			}
 
-			expiryStr := string(val)
-			expiry, err := fmt.Sscanf(expiryStr, "%d", new(int64))
-			if err != nil || expiry == 0 {
-				continue
-			}
-
-			// Actually parse the int64 properly.
-			var expiryUnix int64
-			if _, err := fmt.Sscan(expiryStr, &expiryUnix); err != nil {
+			expiryUnix, err := strconv.ParseInt(string(val), 10, 64)
+			if err != nil {
 				continue
 			}
 
@@ -199,10 +192,6 @@ func (s *Sweeper) reconcile() {
 		prefix := []byte("job:")
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
-			key := string(item.Key())
-			ulidStr := strings.TrimPrefix(key, "job:")
-			_ = ulidStr
-
 			data, err := item.ValueCopy(nil)
 			if err != nil {
 				continue
