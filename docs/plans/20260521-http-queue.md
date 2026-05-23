@@ -142,4 +142,4 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] `make build` depends on `lint` — **lint must pass before building**
 - [x] `make test` is independent of `lint` — fast test iteration without lint gate
 - [x] `make run` available for quick manual testing
-- [ ] README with env vars table and curl examples
+- [x] README with env vars table and curl examples

@@ -225,14 +225,14 @@ POST   /jobs/{id}/nack
 **Files:**
 - Modify: `main.go`
 
-- [ ] Load configuration from environment, including `ADMIN_USER` and `ADMIN_PASS`
-- [ ] Open BadgerDB for queue/worker state only, not admin credential storage
-- [ ] Build router and start HTTP server
-- [ ] Start sweeper goroutine with cancellation context
-- [ ] Start hourly BadgerDB value-log GC loop using `RunValueLogGC(0.5)`
-- [ ] Handle SIGINT/SIGTERM with graceful HTTP shutdown and DB close
-- [ ] Run `go test -race ./...`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Load configuration from environment, including `ADMIN_USER` and `ADMIN_PASS`
+- [x] Open BadgerDB for queue/worker state only, not admin credential storage
+- [x] Build router and start HTTP server
+- [x] Start sweeper goroutine with cancellation context
+- [x] Start hourly BadgerDB value-log GC loop using `RunValueLogGC(0.5)`
+- [x] Handle SIGINT/SIGTERM with graceful HTTP shutdown and DB close
+- [x] Run `go test -race ./...`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 13: Add Project README
 **Files:**
