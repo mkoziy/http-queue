@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -175,20 +176,16 @@ func (s *Sweeper) expireReservations() {
 				job.WorkerID = ""
 				updatedData, err := json.Marshal(job)
 				if err != nil {
-					log.Printf("sweep: marshal dead job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("marshal dead job %s: %w", ulidStr, err)
 				}
 				if err := txn.Delete(item.Key()); err != nil {
-					log.Printf("sweep: delete reserved index for dead job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("delete reserved index for dead job %s: %w", ulidStr, err)
 				}
 				if err := txn.Set(db.DeadIndexKey(queueName, ulidStr), nil); err != nil {
-					log.Printf("sweep: set dead index for job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("set dead index for job %s: %w", ulidStr, err)
 				}
 				if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
-					log.Printf("sweep: update dead job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("update dead job %s: %w", ulidStr, err)
 				}
 				log.Printf("sweep: job %s moved to dead-letter (max attempts)", ulidStr)
 			} else {
@@ -197,20 +194,16 @@ func (s *Sweeper) expireReservations() {
 				job.WorkerID = ""
 				updatedData, err := json.Marshal(job)
 				if err != nil {
-					log.Printf("sweep: marshal re-queued job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("marshal re-queued job %s: %w", ulidStr, err)
 				}
 				if err := txn.Delete(item.Key()); err != nil {
-					log.Printf("sweep: delete expired reserved index for job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("delete expired reserved index for job %s: %w", ulidStr, err)
 				}
 				if err := txn.Set(db.PendingIndexKey(queueName, ulidStr), nil); err != nil {
-					log.Printf("sweep: set pending index for re-queued job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("set pending index for re-queued job %s: %w", ulidStr, err)
 				}
 				if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
-					log.Printf("sweep: update re-queued job %s: %v", ulidStr, err)
-					continue
+					return fmt.Errorf("update re-queued job %s: %w", ulidStr, err)
 				}
 				log.Printf("sweep: job %s re-queued (visibility timeout expired)", ulidStr)
 			}
@@ -252,16 +245,15 @@ func (s *Sweeper) reconcile() {
 					job.WorkerID = ""
 					updatedData, err := json.Marshal(job)
 					if err != nil {
-						log.Printf("sweep: marshal reconciled job %s: %v", job.ID, err)
-						continue
+						return fmt.Errorf("marshal reconciled job %s: %w", job.ID, err)
 					}
 					if err := txn.Set(db.JobKey(job.ID), updatedData); err != nil {
-						log.Printf("sweep: set reconciled job %s: %v", job.ID, err)
-					} else if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
-						log.Printf("sweep: set reconciled pending index for job %s: %v", job.ID, err)
-					} else {
-						log.Printf("sweep: reconciled orphaned reserved job %s -> pending", job.ID)
+						return fmt.Errorf("set reconciled job %s: %w", job.ID, err)
 					}
+					if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
+						return fmt.Errorf("set reconciled pending index for job %s: %w", job.ID, err)
+					}
+					log.Printf("sweep: reconciled orphaned reserved job %s -> pending", job.ID)
 				}
 			case StatusPending:
 				// Verify pending index exists.
@@ -269,10 +261,9 @@ func (s *Sweeper) reconcile() {
 				if err != nil {
 					// Re-create missing pending index.
 					if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
-						log.Printf("sweep: set missing pending index for job %s: %v", job.ID, err)
-					} else {
-						log.Printf("sweep: reconciled missing pending index for job %s", job.ID)
+						return fmt.Errorf("set missing pending index for job %s: %w", job.ID, err)
 					}
+					log.Printf("sweep: reconciled missing pending index for job %s", job.ID)
 				}
 			}
 		}
@@ -307,10 +298,9 @@ func (s *Sweeper) reconcile() {
 			if err != nil {
 				// Phantom index; delete it.
 				if err := txn.Delete(item.Key()); err != nil {
-					log.Printf("sweep: delete phantom pending index %s: %v", key, err)
-				} else {
-					log.Printf("sweep: removed phantom pending index %s", key)
+					return fmt.Errorf("delete phantom pending index %s: %w", key, err)
 				}
+				log.Printf("sweep: removed phantom pending index %s", key)
 			}
 		}
 		return nil
