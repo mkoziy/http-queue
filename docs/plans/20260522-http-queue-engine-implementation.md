@@ -173,14 +173,14 @@ POST   /jobs/{id}/nack
 - Modify: `api/middleware.go`
 - Create: `api/middleware_test.go`
 
-- [ ] Implement Basic Auth middleware that accepts expected username/password from `config.Config.AdminUser` and `config.Config.AdminPass`
-- [ ] Ensure Basic Auth middleware does not read or write admin credentials from BadgerDB
-- [ ] Implement Bearer Auth middleware for worker routes
-- [ ] Add context helpers for storing and retrieving authenticated workers
-- [ ] Ensure Bearer Auth calls `WorkerByToken` and `TouchWorker`
-- [ ] Add tests for successful auth, missing auth, invalid auth, worker context injection, and proof that admin auth uses config values only
-- [ ] Run `go test -race ./api -run Middleware`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Implement Basic Auth middleware that accepts expected username/password from `config.Config.AdminUser` and `config.Config.AdminPass`
+- [x] Ensure Basic Auth middleware does not read or write admin credentials from BadgerDB
+- [x] Implement Bearer Auth middleware for worker routes
+- [x] Add context helpers for storing and retrieving authenticated workers
+- [x] Ensure Bearer Auth calls `WorkerByToken` and `TouchWorker`
+- [x] Add tests for successful auth, missing auth, invalid auth, worker context injection, and proof that admin auth uses config values only
+- [x] Run `go test -race ./api -run Middleware`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 9: Implement Admin Handlers
 **Files:**
