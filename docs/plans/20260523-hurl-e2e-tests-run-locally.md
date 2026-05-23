@@ -43,23 +43,23 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 - Create: `scripts/e2e-local.sh`
 - Modify: `Makefile`
 
-- [ ] Create `scripts/e2e-local.sh` that checks `hurl` is installed and exits with a clear message if not.
-- [ ] Have the script allocate a local test port, create a temporary BadgerDB directory, generate a unique `run_id`, export deterministic test env vars, and start `go run .` in the background.
-- [ ] Configure fast E2E timings with short `VISIBILITY_TIMEOUT`, `WORKER_EXPIRY`, and `SWEEP_INTERVAL`, plus deterministic `MAX_ATTEMPTS`.
-- [ ] Add readiness polling against the local server before running Hurl files.
-- [ ] Add `trap` cleanup to kill the server process and remove temporary BadgerDB data on success, failure, or interrupt.
-- [ ] Add a `make e2e` target that runs `scripts/e2e-local.sh`.
+- [x] Create `scripts/e2e-local.sh` that checks `hurl` is installed and exits with a clear message if not.
+- [x] Have the script allocate a local test port, create a temporary BadgerDB directory, generate a unique `run_id`, export deterministic test env vars, and start `go run .` in the background.
+- [x] Configure fast E2E timings with short `VISIBILITY_TIMEOUT`, `WORKER_EXPIRY`, and `SWEEP_INTERVAL`, plus deterministic `MAX_ATTEMPTS`.
+- [x] Add readiness polling against the local server before running Hurl files.
+- [x] Add `trap` cleanup to kill the server process and remove temporary BadgerDB data on success, failure, or interrupt.
+- [x] Add a `make e2e` target that runs `scripts/e2e-local.sh`.
 
 ### Task 2: Add Happy Path Hurl Test
 
 **Files:**
 - Create: `tests/e2e/001-happy-path.hurl`
 
-- [ ] Register a worker through `POST /workers` using Basic Auth and capture `worker_id` and `token`.
-- [ ] Schedule a job through `POST /queues/{{run_id}}-happy/jobs` and capture the returned job ID.
-- [ ] Claim the job through `GET /queues/{{run_id}}-happy/next` using the captured bearer token.
-- [ ] Assert status codes, JSON fields, payload contents, queue name, and `attempts == 1`.
-- [ ] Ack the claimed job and assert the queue is empty on the next claim attempt with `204 No Content`.
+- [x] Register a worker through `POST /workers` using Basic Auth and capture `worker_id` and `token`.
+- [x] Schedule a job through `POST /queues/{{run_id}}-happy/jobs` and capture the returned job ID.
+- [x] Claim the job through `GET /queues/{{run_id}}-happy/next` using the captured bearer token.
+- [x] Assert status codes, JSON fields, payload contents, queue name, and `attempts == 1`.
+- [x] Ack the claimed job and assert the queue is empty on the next claim attempt with `204 No Content`.
 
 ### Task 3: Add Nack And Reclaim Hurl Test
 
