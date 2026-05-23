@@ -3,6 +3,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -138,6 +139,30 @@ func TestHandleScheduleJob_InvalidBody(t *testing.T) {
 	}
 	if errResp["error"] == "" {
 		t.Error("expected error message in response")
+	}
+}
+
+func TestHandleScheduleJob_PayloadTooLarge(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	// Build a payload that exceeds 1 MiB.
+	largePayload := make([]byte, (1<<20)+1)
+	for i := range largePayload {
+		largePayload[i] = 'x'
+	}
+	body := fmt.Sprintf(`{"payload":"%s"}`, string(largePayload))
+	req := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(body))
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 

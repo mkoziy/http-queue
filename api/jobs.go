@@ -29,6 +29,8 @@ func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
+
 	var body struct {
 		Payload json.RawMessage `json:"payload"`
 	}
