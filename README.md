@@ -224,6 +224,7 @@ make lint    # Run golangci-lint
 make build   # Build (runs lint first)
 make test    # Run tests with race detector
 make run     # Quick start (set env vars first)
+make e2e     # Run end-to-end Hurl tests (starts server with isolated state)
 ```
 
 ### Testing
@@ -235,6 +236,91 @@ make test
 # Run a specific test suite
 go test -race ./queue/ -run TestScheduleAndClaim
 go test -race ./api/ -run TestAdminEndpoints
+```
+
+### End-to-End Tests
+
+[![Hurl](https://img.shields.io/badge/-Hurl-FF5722?logo=hurl&logoColor=white)](https://hurl.dev)
+
+The project includes a suite of Hurl-based end-to-end tests that exercise the full HTTP API against a running server with an isolated temporary BadgerDB instance.
+
+#### Prerequisites
+
+Install [Hurl](https://hurl.dev) (4.0+):
+
+```bash
+brew install hurl          # macOS
+# or: https://hurl.dev/docs/installation.html
+```
+
+#### Test suite
+
+| File | Coverage |
+|------|----------|
+| `001-happy-path.hurl` | Register worker → schedule job → claim → ack → empty queue |
+| `002-nack-reclaim.hurl` | Claim → nack (requeue) → reclaim → ack |
+| `003-multiple-workers-exclusive-claim.hurl` | Two workers; one claims, other gets 204; ownership preserved |
+| `004-auth-and-validation.hurl` | Missing/wrong Basic Auth, invalid Bearer tokens, bad JSON body, invalid queue names (`:`, `/`), empty queue 204 |
+| `005-ownership-and-deregister.hurl` | Cross-worker ack/nack rejection; deregister requeues reserved jobs |
+| `006-timeout-and-max-attempts.hurl` | Visibility timeout auto-requeue; nack at `MAX_ATTEMPTS` moves to dead-letter |
+
+#### Running
+
+```bash
+make e2e
+```
+
+Or invoke the runner directly:
+
+```bash
+./scripts/e2e-local.sh
+```
+
+#### How the local runner works
+
+`scripts/e2e-local.sh` does the following:
+
+1. **Finds a free port** using a ephemeral socket bind.
+2. **Creates a temporary BadgerDB directory** (`mktemp -d /tmp/http-queue-e2e.XXXXXX`) — state is fully isolated per run and cleaned up on exit.
+3. **Generates a unique `run_id`** (e.g. `e2e-1712345678`) so queue names in concurrent executions do not collide.
+4. **Configures fast timings** for deterministic testing without long waits:
+
+   | Variable | E2E value | Purpose |
+   |----------|-----------|---------|
+   | `ADMIN_USER` | `e2e-admin` | Fixed credentials for test requests |
+   | `ADMIN_PASS` | `e2e-secret` | |
+   | `VISIBILITY_TIMEOUT` | `2s` | Fast job expiry for timeout tests |
+   | `WORKER_EXPIRY` | `5s` | Fast worker expiry for deregister tests |
+   | `SWEEP_INTERVAL` | `1s` | Aggressive reconciliation sweep |
+   | `MAX_ATTEMPTS` | `3` | Low threshold for dead-letter testing |
+   | `LAST_SEEN_DEBOUNCE` | `100ms` | Minimal debounce for fast polling |
+
+5. **Starts the Go server** in the background (`go run .`).
+6. **Waits for readiness** by polling `POST /workers` (expects `401` when the server is reachable — no health endpoint needed).
+7. **Runs all `*.hurl` files** in `tests/e2e/` via `hurl --test`, passing `base_url` and `run_id` as variables.
+8. **Cleans up** — kills the server process and removes the temporary BadgerDB directory, regardless of success or failure.
+
+Each Hurl file uses `{{base_url}}` (e.g. `http://127.0.0.1:34821`) and `{{run_id}}` (e.g. `e2e-1712345678`) to stay isolated. The `run_id` is embedded in queue names like `{{run_id}}-happy`.
+
+> **Note:** The test runner uses `VISIBILITY_TIMEOUT=2s` and `SWEEP_INTERVAL=1s`. The timeout-requeue test (`006-timeout-and-max-attempts.hurl`) waits up to 5s with retries, so these values keep the suite fast (~10–15s total).
+
+## Debugging E2E Tests
+
+If a test fails, the runner prints Hurl's detailed diff output. You can also run a single test file interactively:
+
+```bash
+hurl --test --variable base_url=http://127.0.0.1:8080 --variable run_id=debug-01 tests/e2e/001-happy-path.hurl
+```
+
+To inspect server logs during a run, start the server manually and then run Hurl against it:
+
+```bash
+ADMIN_USER=e2e-admin ADMIN_PASS=e2e-secret BADGER_PATH=/tmp/hq-e2e-debug \
+  VISIBILITY_TIMEOUT=2s WORKER_EXPIRY=5s SWEEP_INTERVAL=1s MAX_ATTEMPTS=3 \
+  LAST_SEEN_DEBOUNCE=100ms \
+  go run . &
+
+hurl --test --variable base_url=http://127.0.0.1:8080 --variable run_id=debug-01 tests/e2e/*.hurl
 ```
 
 ## License

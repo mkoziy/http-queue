@@ -123,8 +123,8 @@ Add file-based Hurl end-to-end tests for the HTTP queue API and a local runner t
 **Files:**
 - Modify: `README.md`
 
-- [ ] Add Hurl as an optional local E2E prerequisite.
-- [ ] Document `make e2e` as the preferred local command.
-- [ ] Document how to run Hurl files manually against an already-running server using `--variable base_url=...` and `--variable run_id=...`.
-- [ ] Mention that the runner uses temporary BadgerDB data, test credentials, and short timeout settings.
-- [ ] Mention that the E2E suite includes edge coverage for multiple-worker exclusive claim, auth, validation, ownership, deregistration requeue, visibility timeout, and max-attempt behavior.
+- [x] Add Hurl as an optional local E2E prerequisite.
+- [x] Document `make e2e` as the preferred local command.
+- [x] Document how to run Hurl files manually against an already-running server using `--variable base_url=...` and `--variable run_id=...`.
+- [x] Mention that the runner uses temporary BadgerDB data, test credentials, and short timeout settings.
+- [x] Mention that the E2E suite includes edge coverage for multiple-worker exclusive claim, auth, validation, ownership, deregistration requeue, visibility timeout, and max-attempt behavior.
