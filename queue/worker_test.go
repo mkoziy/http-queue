@@ -253,6 +253,38 @@ func TestDeregisterWorker(t *testing.T) {
 	}
 }
 
+func TestDeregisterWorker_CleansUpInMemoryCache(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	id, _, err := RegisterWorker(database, testConfig())
+	if err != nil {
+		t.Fatalf("RegisterWorker() error: %v", err)
+	}
+
+	// Touch the worker to populate both in-memory keys.
+	TouchWorker(database, id, testConfig().LastSeenDebounce)
+
+	if _, ok := workerLastSeen.Load(id); !ok {
+		t.Fatal("worker last-seen not in memory after TouchWorker")
+	}
+	if _, ok := workerLastSeen.Load("flush:" + id); !ok {
+		t.Fatal("worker flush key not in memory after TouchWorker")
+	}
+
+	err = DeregisterWorker(database, id)
+	if err != nil {
+		t.Fatalf("DeregisterWorker() error: %v", err)
+	}
+
+	if _, ok := workerLastSeen.Load(id); ok {
+		t.Error("worker in-memory last-seen still exists after deregistration")
+	}
+	if _, ok := workerLastSeen.Load("flush:" + id); ok {
+		t.Error("worker in-memory flush key still exists after deregistration")
+	}
+}
+
 func TestDeregisterWorker_TokenIndexCleaned(t *testing.T) {
 	database, cleanup := openTestDB(t)
 	defer cleanup()

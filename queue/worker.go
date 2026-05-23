@@ -175,6 +175,7 @@ func DeregisterWorker(database *badger.DB, id string) error {
 
 	// Clean up in-memory last-seen.
 	workerLastSeen.Delete(id)
+	workerLastSeen.Delete("flush:" + id)
 
 	return nil
 }
