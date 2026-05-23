@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	badger "github.com/dgraph-io/badger/v4"
@@ -66,6 +67,10 @@ func (h *WorkersHandler) HandleClaimNextJob(w http.ResponseWriter, r *http.Reque
 
 	job, err := queue.ClaimNextJob(h.db, queueName, worker.ID, h.cfg.VisibilityTimeout)
 	if err != nil {
+		if errors.Is(err, queue.ErrInvalidQueueName) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
