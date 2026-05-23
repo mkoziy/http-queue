@@ -105,9 +105,9 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [ ] Re-queue respects `MAX_ATTEMPTS`: if `job.Attempts >= MAX_ATTEMPTS`, move to dead-letter instead
 
 ### 8. Middleware (`api/middleware.go`)
-- [ ] `BasicAuth(user, pass string) func(http.Handler) http.Handler`
-- [ ] `BearerAuth(db *badger.DB) func(http.Handler) http.Handler` — extracts token, looks up worker, touches last-seen, injects worker into context
-- [ ] Context key type + helpers: `WorkerFromCtx(ctx) *queue.Worker`
+- [x] `BasicAuth(user, pass string) func(http.Handler) http.Handler`
+- [x] `BearerAuth(db *badger.DB) func(http.Handler) http.Handler` — extracts token, looks up worker, touches last-seen, injects worker into context
+- [x] Context key type + helpers: `WorkerFromCtx(ctx) *queue.Worker`
 
 ### 9. Handlers — Admin jobs (`api/jobs.go`)
 - [ ] `POST /queues/{queue}/jobs` — decode `{"payload": {...}}`, call `ScheduleJob`, return 201 + job ID
