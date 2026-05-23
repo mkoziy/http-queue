@@ -3,6 +3,7 @@ package queue
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -753,5 +754,170 @@ func TestWorkerLastSeen_CleanedOnDeregister(t *testing.T) {
 	_, ok = workerLastSeen.Load(id)
 	if ok {
 		t.Error("worker still in in-memory cache after deregistration")
+	}
+}
+
+func TestDeregisterWorker_RequeuesManyJobs(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	// Register worker.
+	id, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	// Schedule and claim enough jobs to exceed one maintenance batch.
+	const numJobs = maintenanceBatchSize + 5
+	claimedIDs := make(map[string]bool, numJobs)
+
+	payload := []byte(`{"n":0}`)
+	for i := 0; i < numJobs; i++ {
+		job, err := ScheduleJob(database, "testqueue", payload)
+		if err != nil {
+			t.Fatalf("ScheduleJob %d: %v", i, err)
+		}
+		claimed, err := ClaimNextJob(database, "testqueue", id, cfg.VisibilityTimeout)
+		if err != nil {
+			t.Fatalf("ClaimNextJob %d: %v", i, err)
+		}
+		if claimed == nil {
+			t.Fatalf("ClaimNextJob %d returned nil", i)
+		}
+		_ = job
+		claimedIDs[claimed.ID] = true
+	}
+
+	// Deregister — this should process jobs in multiple batches.
+	if err := DeregisterWorker(database, id); err != nil {
+		t.Fatalf("DeregisterWorker(): %v", err)
+	}
+
+	// All claimed jobs should be back to pending.
+	for jobID := range claimedIDs {
+		var j Job
+		err := database.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(db.JobKey(jobID))
+			if err != nil {
+				return err
+			}
+			data, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(data, &j)
+		})
+		if err != nil {
+			t.Fatalf("reading job %s: %v", jobID, err)
+		}
+		if j.Status != StatusPending {
+			t.Errorf("job %s status = %q, want %q", jobID, j.Status, StatusPending)
+		}
+		if j.WorkerID != "" {
+			t.Errorf("job %s WorkerID = %q, want empty", jobID, j.WorkerID)
+		}
+	}
+
+	// Verify the worker record is gone.
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.WorkerKey(id))
+		return err
+	})
+	if err == nil {
+		t.Error("worker record still exists after deregistration")
+	}
+}
+
+func TestDeregisterWorker_InvariantsAfterBatchRequeue(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	id, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	// Schedule and claim enough jobs to exceed one maintenance batch.
+	const numJobs = maintenanceBatchSize + 7
+	claimedIDs := make([]string, 0, numJobs)
+
+	for i := 0; i < numJobs; i++ {
+		_, err := ScheduleJob(database, "invariantqueue", []byte(`{"n":`+fmt.Sprintf("%d", i)+`}`))
+		if err != nil {
+			t.Fatalf("ScheduleJob %d: %v", i, err)
+		}
+		claimed, err := ClaimNextJob(database, "invariantqueue", id, cfg.VisibilityTimeout)
+		if err != nil {
+			t.Fatalf("ClaimNextJob %d: %v", i, err)
+		}
+		if claimed == nil {
+			t.Fatalf("ClaimNextJob %d returned nil", i)
+		}
+		claimedIDs = append(claimedIDs, claimed.ID)
+	}
+
+	// Deregister — this processes jobs across multiple batches.
+	if err := DeregisterWorker(database, id); err != nil {
+		t.Fatalf("DeregisterWorker(): %v", err)
+	}
+
+	// Verify invariants for every re-queued job.
+	for _, jobID := range claimedIDs {
+		// Check the job record fields.
+		var j Job
+		err := database.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(db.JobKey(jobID))
+			if err != nil {
+				return err
+			}
+			data, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(data, &j)
+		})
+		if err != nil {
+			t.Fatalf("reading job %s: %v", jobID, err)
+		}
+		if j.Status != StatusPending {
+			t.Errorf("job %s status = %q, want %q after deregister", jobID, j.Status, StatusPending)
+		}
+		if j.WorkerID != "" {
+			t.Errorf("job %s WorkerID = %q, want empty after deregister", jobID, j.WorkerID)
+		}
+
+		// Verify pending index exists.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.PendingIndexKey("invariantqueue", jobID))
+			return err
+		}); err != nil {
+			t.Errorf("job %s: missing pending index after deregister", jobID)
+		}
+
+		// Verify reserved index is gone.
+		if err := database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey("invariantqueue", jobID))
+			return err
+		}); err == nil {
+			t.Errorf("job %s: stale reserved index after deregister", jobID)
+		}
+	}
+
+	// Verify the worker record is gone.
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.WorkerKey(id))
+		return err
+	})
+	if err == nil {
+		t.Error("worker record still exists after deregistration")
+	}
+
+	// Verify in-memory cache is cleaned up.
+	if _, ok := workerLastSeen.Load(id); ok {
+		t.Error("worker in-memory last-seen still exists after deregistration")
 	}
 }
