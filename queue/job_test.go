@@ -112,6 +112,19 @@ func TestScheduleJob_QueueNameWithColonRejected(t *testing.T) {
 	}
 }
 
+func TestScheduleJob_QueueNameWithSlashRejected(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	_, err := ScheduleJob(database, "bad/queue", json.RawMessage(`{}`))
+	if err == nil {
+		t.Fatal("ScheduleJob with '/' in queue name: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), ErrInvalidQueueName.Error()) {
+		t.Errorf("ScheduleJob error = %v, want %v", err, ErrInvalidQueueName)
+	}
+}
+
 func TestScheduleJob_MultipleQueues(t *testing.T) {
 	database, cleanup := openTestDB(t)
 	defer cleanup()
@@ -1064,6 +1077,12 @@ func TestValidateQueueName(t *testing.T) {
 		{"multiple-colons", "a:b:c", true},
 		{"colons-at-start", ":queue", true},
 		{"colons-at-end", "queue:", true},
+		{"with-slash", "bad/queue", true},
+		{"slash-only", "/", true},
+		{"multiple-slashes", "a/b/c", true},
+		{"slash-at-start", "/queue", true},
+		{"slash-at-end", "queue/", true},
+		{"colon-and-slash", "bad:queue/name", true},
 	}
 
 	for _, tt := range tests {

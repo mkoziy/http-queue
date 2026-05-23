@@ -18,8 +18,8 @@ const maxClaimRetries = 3
 
 // Sentinel errors for job operations.
 var (
-	// ErrInvalidQueueName is returned when a queue name contains ':'.
-	ErrInvalidQueueName = errors.New("queue name must not contain ':'")
+	// ErrInvalidQueueName is returned when a queue name contains ':' or '/'.
+	ErrInvalidQueueName = errors.New("queue name must not contain ':' or '/'")
 	// ErrNotJobOwner is returned when a worker tries to ack/nack a job it doesn't own.
 	ErrNotJobOwner = errors.New("job not owned by this worker")
 )
@@ -48,7 +48,7 @@ type Job struct {
 }
 
 func validateQueueName(queue string) error {
-	if strings.Contains(queue, ":") {
+	if strings.Contains(queue, ":") || strings.Contains(queue, "/") {
 		return ErrInvalidQueueName
 	}
 	return nil

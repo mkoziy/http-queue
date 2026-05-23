@@ -36,7 +36,7 @@ func (h *WorkersHandler) HandleRegisterWorker(w http.ResponseWriter, _ *http.Req
 
 // HandleDeregisterWorker handles DELETE /workers/{id}
 func (h *WorkersHandler) HandleDeregisterWorker(w http.ResponseWriter, r *http.Request) {
-	workerID := pathParam(r.URL.Path, "/workers/", "")
+	workerID := r.PathValue("id")
 	if workerID == "" {
 		respondError(w, http.StatusBadRequest, "missing worker id")
 		return
@@ -52,7 +52,7 @@ func (h *WorkersHandler) HandleDeregisterWorker(w http.ResponseWriter, r *http.R
 
 // HandleClaimNextJob handles GET /queues/{queue}/next
 func (h *WorkersHandler) HandleClaimNextJob(w http.ResponseWriter, r *http.Request) {
-	queueName := pathParam(r.URL.Path, "/queues/", "/next")
+	queueName := r.PathValue("queue")
 	if queueName == "" {
 		respondError(w, http.StatusBadRequest, "missing queue name")
 		return
@@ -85,7 +85,7 @@ func (h *WorkersHandler) HandleClaimNextJob(w http.ResponseWriter, r *http.Reque
 
 // HandleAckJob handles POST /jobs/{id}/ack
 func (h *WorkersHandler) HandleAckJob(w http.ResponseWriter, r *http.Request) {
-	jobID := pathParam(r.URL.Path, "/jobs/", "/ack")
+	jobID := r.PathValue("id")
 	if jobID == "" {
 		respondError(w, http.StatusBadRequest, "missing job id")
 		return
@@ -107,7 +107,7 @@ func (h *WorkersHandler) HandleAckJob(w http.ResponseWriter, r *http.Request) {
 
 // HandleNackJob handles POST /jobs/{id}/nack
 func (h *WorkersHandler) HandleNackJob(w http.ResponseWriter, r *http.Request) {
-	jobID := pathParam(r.URL.Path, "/jobs/", "/nack")
+	jobID := r.PathValue("id")
 	if jobID == "" {
 		respondError(w, http.StatusBadRequest, "missing job id")
 		return

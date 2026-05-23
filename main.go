@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,13 +31,20 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
 
 	// Start sweeper.
 	sweeper := queue.NewSweeper(database, cfg)
-	go sweeper.Start(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sweeper.Start(ctx)
+	}()
 
 	// Start BadgerDB value log GC goroutine.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -55,8 +63,11 @@ func main() {
 	router := api.New(database, cfg)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.Port),
-		Handler: router,
+		Addr:         fmt.Sprintf(":%s", cfg.Port),
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown.
@@ -82,6 +93,7 @@ func main() {
 
 	// Server has stopped; clean up.
 	cancel()
+	wg.Wait()
 	if err := db.Close(database); err != nil {
 		log.Printf("db close error: %v", err)
 	}

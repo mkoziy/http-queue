@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	badger "github.com/dgraph-io/badger/v4"
 
@@ -44,20 +43,4 @@ func New(database *badger.DB, cfg *config.Config) http.Handler {
 	return Logger(mux)
 }
 
-// pathParam extracts the value of a path segment between a prefix and a suffix.
-// For example, pathParam("/queues/myqueue/jobs", "/queues/", "/jobs") returns "myqueue".
-// pathParam("/workers/myid", "/workers/", "") returns "myid".
-func pathParam(path, prefix, suffix string) string {
-	if !strings.HasPrefix(path, prefix) {
-		return ""
-	}
-	trimmed := strings.TrimPrefix(path, prefix)
-	if suffix != "" {
-		idx := strings.Index(trimmed, suffix)
-		if idx < 0 {
-			return ""
-		}
-		return trimmed[:idx]
-	}
-	return trimmed
-}
+

@@ -23,7 +23,7 @@ func NewJobsHandler(database *badger.DB, cfg *config.Config) *JobsHandler {
 
 // HandleScheduleJob handles POST /queues/{queue}/jobs
 func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) {
-	queueName := pathParam(r.URL.Path, "/queues/", "/jobs")
+	queueName := r.PathValue("queue")
 	if queueName == "" {
 		respondError(w, http.StatusBadRequest, "missing queue name")
 		return
