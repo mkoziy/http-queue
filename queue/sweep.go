@@ -465,11 +465,12 @@ func (s *Sweeper) reconcilePhantomIndexes() {
 
 			// Check for pending or reserved indexes.
 			var kind string
-			if strings.Contains(key, ":pending:") {
+			switch {
+			case strings.Contains(key, ":pending:"):
 				kind = "pending"
-			} else if strings.Contains(key, ":reserved:") {
+			case strings.Contains(key, ":reserved:"):
 				kind = "reserved"
-			} else {
+			default:
 				continue
 			}
 

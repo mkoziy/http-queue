@@ -1063,15 +1063,11 @@ func TestSweep_ManyExpiredReservations_RequeuedAndDeadLettered(t *testing.T) {
 	}
 }
 
-func TestSweep_ExpiredReservation_BatchStillProcessedAfterPartialError(t *testing.T) {
+func TestSweep_ExpiredReservation_SkipsUnparseableAndProcessesValid(t *testing.T) {
 	database, cleanup := openTestDB(t)
 	defer cleanup()
 
 	cfg := sweepTestConfig()
-
-	// Create jobs in two different queues.
-	// One will have a bad (unparseable) reservation value that causes it to be
-	// skipped in collection; another valid one should still be processed.
 
 	// Job 1: valid expired reservation (should be re-queued).
 	_, err := ScheduleJob(database, "queue-a", json.RawMessage(`{"a":1}`))
@@ -1083,6 +1079,23 @@ func TestSweep_ExpiredReservation_BatchStillProcessedAfterPartialError(t *testin
 		t.Fatalf("ClaimNextJob: %v", err)
 	}
 	setReservedExpiry(t, database, "queue-a", claimed1.ID, time.Now().UTC().Add(-1*time.Hour))
+
+	// Job 2: unparseable reserved index value (should be skipped in collection).
+	_, err = ScheduleJob(database, "queue-b", json.RawMessage(`{"b":2}`))
+	if err != nil {
+		t.Fatalf("ScheduleJob: %v", err)
+	}
+	claimed2, err := ClaimNextJob(database, "queue-b", "worker-2", cfg.VisibilityTimeout)
+	if err != nil {
+		t.Fatalf("ClaimNextJob: %v", err)
+	}
+	// Set an unparseable reserved index value.
+	err = database.Update(func(txn *badger.Txn) error {
+		return txn.Set(db.ReservedIndexKey("queue-b", claimed2.ID), []byte("not-a-number"))
+	})
+	if err != nil {
+		t.Fatalf("set unparseable reserved value: %v", err)
+	}
 
 	// Run expireReservations.
 	sweeper := NewSweeper(database, cfg)
@@ -1106,6 +1119,26 @@ func TestSweep_ExpiredReservation_BatchStillProcessedAfterPartialError(t *testin
 	}
 	if j1.Status != StatusPending {
 		t.Errorf("job 1 status = %q, want %q", j1.Status, StatusPending)
+	}
+
+	// Verify job 2 is still reserved (unparseable index was skipped, not crashed).
+	var j2 Job
+	err = database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(claimed2.ID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(data, &j2)
+	})
+	if err != nil {
+		t.Fatalf("reading job 2: %v", err)
+	}
+	if j2.Status != StatusReserved {
+		t.Errorf("job 2 status = %q, want %q (unparseable index should be skipped)", j2.Status, StatusReserved)
 	}
 }
 
