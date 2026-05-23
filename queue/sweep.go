@@ -285,10 +285,33 @@ func (s *Sweeper) expireReservationBatch(now int64, refs []reservedRef) error {
 	return nil
 }
 
+// reconcileJobRef identifies a job-record inconsistency found during reconciliation.
+type reconcileJobRef struct {
+	jobID              string
+	queue              string
+	isOrphanedReserved bool
+}
+
+// phantomIndexRef identifies a phantom index key to delete during reconciliation.
+type phantomIndexRef struct {
+	jobID string
+	queue string
+	kind  string // "pending" or "reserved"
+}
+
 // reconcile checks for orphaned records and fixes inconsistencies.
+// Collection happens in read transactions; mutations happen in bounded write batches
+// to prevent unbounded key mutations in a single BadgerDB transaction.
 func (s *Sweeper) reconcile() {
-	// Scan all job records with status=reserved and verify matching reserved index exists.
-	err := s.db.Update(func(txn *badger.Txn) error {
+	s.reconcileJobRecords()
+	s.reconcilePhantomIndexes()
+}
+
+// reconcileJobRecords scans job records for inconsistencies and fixes them in batches.
+func (s *Sweeper) reconcileJobRecords() {
+	var ops []reconcileJobRef
+
+	err := s.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
@@ -307,44 +330,131 @@ func (s *Sweeper) reconcile() {
 
 			switch job.Status {
 			case StatusReserved:
-				// Verify reserved index exists.
+				// Check if reserved index is missing (orphaned reserved job).
 				_, err := txn.Get(db.ReservedIndexKey(job.Queue, job.ID))
 				if err != nil {
-					// Orphaned reserved job; re-queue as pending.
-					job.Status = StatusPending
-					job.WorkerID = ""
-					updatedData, err := json.Marshal(job)
-					if err != nil {
-						return fmt.Errorf("marshal reconciled job %s: %w", job.ID, err)
-					}
-					if err := txn.Set(db.JobKey(job.ID), updatedData); err != nil {
-						return fmt.Errorf("set reconciled job %s: %w", job.ID, err)
-					}
-					if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
-						return fmt.Errorf("set reconciled pending index for job %s: %w", job.ID, err)
-					}
-					log.Printf("sweep: reconciled orphaned reserved job %s -> pending", job.ID)
+					ops = append(ops, reconcileJobRef{
+						jobID:              job.ID,
+						queue:              job.Queue,
+						isOrphanedReserved: true,
+					})
 				}
 			case StatusPending:
-				// Verify pending index exists.
+				// Check if pending index is missing.
 				_, err := txn.Get(db.PendingIndexKey(job.Queue, job.ID))
 				if err != nil {
-					// Re-create missing pending index.
-					if err := txn.Set(db.PendingIndexKey(job.Queue, job.ID), nil); err != nil {
-						return fmt.Errorf("set missing pending index for job %s: %w", job.ID, err)
-					}
-					log.Printf("sweep: reconciled missing pending index for job %s", job.ID)
+					ops = append(ops, reconcileJobRef{
+						jobID: job.ID,
+						queue: job.Queue,
+					})
 				}
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		log.Printf("sweep: reconcile: %v", err)
+		log.Printf("sweep: reconcile collect job records: %v", err)
+		return
 	}
 
-	// Scan pending indexes and verify matching job records exist.
-	err = s.db.Update(func(txn *badger.Txn) error {
+	for batchIdx, batch := range batchSlice(ops, maintenanceBatchSize) {
+		if err := s.applyReconcileJobBatch(batch); err != nil {
+			log.Printf("sweep: reconcile job records batch %d: %v", batchIdx, err)
+		}
+	}
+}
+
+// applyReconcileJobBatch processes a batch of job-record fix-ups in a single write transaction.
+// Each ref is re-checked to confirm the inconsistency still exists.
+func (s *Sweeper) applyReconcileJobBatch(ops []reconcileJobRef) error {
+	if len(ops) == 0 {
+		return nil
+	}
+
+	err := s.db.Update(func(txn *badger.Txn) error {
+		for _, op := range ops {
+			if op.isOrphanedReserved {
+				// Re-check: job still reserved and reserved index still missing.
+				jobItem, err := txn.Get(db.JobKey(op.jobID))
+				if err != nil {
+					continue
+				}
+				data, err := jobItem.ValueCopy(nil)
+				if err != nil {
+					continue
+				}
+				var job Job
+				if err := json.Unmarshal(data, &job); err != nil {
+					continue
+				}
+				if job.Status != StatusReserved {
+					continue
+				}
+				_, err = txn.Get(db.ReservedIndexKey(job.Queue, job.ID))
+				if err == nil {
+					// Reserved index now exists; not orphaned anymore.
+					continue
+				}
+
+				// Fix: re-queue as pending.
+				job.Status = StatusPending
+				job.WorkerID = ""
+				updatedData, err := json.Marshal(job)
+				if err != nil {
+					return fmt.Errorf("marshal reconciled job %s: %w", op.jobID, err)
+				}
+				if err := txn.Set(db.JobKey(op.jobID), updatedData); err != nil {
+					return fmt.Errorf("set reconciled job %s: %w", op.jobID, err)
+				}
+				if err := txn.Set(db.PendingIndexKey(op.queue, op.jobID), nil); err != nil {
+					return fmt.Errorf("set reconciled pending index for job %s: %w", op.jobID, err)
+				}
+				log.Printf("sweep: reconciled orphaned reserved job %s -> pending", op.jobID)
+			} else {
+				// Re-check: job still exists and is still pending.
+				jobItem, err := txn.Get(db.JobKey(op.jobID))
+				if err != nil {
+					continue
+				}
+				data, err := jobItem.ValueCopy(nil)
+				if err != nil {
+					continue
+				}
+				var job Job
+				if err := json.Unmarshal(data, &job); err != nil {
+					continue
+				}
+				if job.Status != StatusPending {
+					continue
+				}
+
+				// Re-check: pending index still missing.
+				_, err = txn.Get(db.PendingIndexKey(op.queue, op.jobID))
+				if err == nil {
+					continue
+				}
+
+				// Re-create missing pending index.
+				if err := txn.Set(db.PendingIndexKey(op.queue, op.jobID), nil); err != nil {
+					return fmt.Errorf("set missing pending index for job %s: %w", op.jobID, err)
+				}
+				log.Printf("sweep: reconciled missing pending index for job %s", op.jobID)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("apply reconcile job batch: %w", err)
+	}
+	return nil
+}
+
+// reconcilePhantomIndexes scans index keys and removes phantom entries (no matching job record).
+// Covers both pending and reserved indexes.
+func (s *Sweeper) reconcilePhantomIndexes() {
+	var phantoms []phantomIndexRef
+
+	err := s.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
@@ -353,7 +463,13 @@ func (s *Sweeper) reconcile() {
 			item := it.Item()
 			key := string(item.Key())
 
-			if !strings.Contains(key, ":pending:") {
+			// Check for pending or reserved indexes.
+			var kind string
+			if strings.Contains(key, ":pending:") {
+				kind = "pending"
+			} else if strings.Contains(key, ":reserved:") {
+				kind = "reserved"
+			} else {
 				continue
 			}
 
@@ -366,16 +482,62 @@ func (s *Sweeper) reconcile() {
 			// Verify job record exists.
 			_, err := txn.Get(db.JobKey(ulidStr))
 			if err != nil {
-				// Phantom index; delete it.
-				if err := txn.Delete(item.Key()); err != nil {
-					return fmt.Errorf("delete phantom pending index %s: %w", key, err)
-				}
-				log.Printf("sweep: removed phantom pending index %s", key)
+				phantoms = append(phantoms, phantomIndexRef{
+					jobID: ulidStr,
+					queue: parts[1],
+					kind:  kind,
+				})
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		log.Printf("sweep: reconcile pending indexes: %v", err)
+		log.Printf("sweep: collect phantom indexes: %v", err)
+		return
 	}
+
+	for batchIdx, batch := range batchSlice(phantoms, maintenanceBatchSize) {
+		if err := s.applyPhantomIndexBatch(batch); err != nil {
+			log.Printf("sweep: remove phantom indexes batch %d: %v", batchIdx, err)
+		}
+	}
+}
+
+// applyPhantomIndexBatch removes a batch of phantom index keys in a single write transaction.
+// Each entry is re-checked: the job record must still be absent.
+func (s *Sweeper) applyPhantomIndexBatch(phantoms []phantomIndexRef) error {
+	if len(phantoms) == 0 {
+		return nil
+	}
+
+	err := s.db.Update(func(txn *badger.Txn) error {
+		for _, ph := range phantoms {
+			// Re-check job record is still absent.
+			_, err := txn.Get(db.JobKey(ph.jobID))
+			if err == nil {
+				// Job record now exists; not a phantom.
+				continue
+			}
+
+			var key []byte
+			switch ph.kind {
+			case "pending":
+				key = db.PendingIndexKey(ph.queue, ph.jobID)
+			case "reserved":
+				key = db.ReservedIndexKey(ph.queue, ph.jobID)
+			default:
+				continue
+			}
+
+			if err := txn.Delete(key); err != nil {
+				return fmt.Errorf("delete phantom %s index %s: %w", ph.kind, string(key), err)
+			}
+			log.Printf("sweep: removed phantom %s index for %s/%s", ph.kind, ph.queue, ph.jobID)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("apply phantom index batch: %w", err)
+	}
+	return nil
 }

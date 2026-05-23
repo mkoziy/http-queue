@@ -244,7 +244,9 @@ func loadWorkerTokenHash(database *badger.DB, id string) (string, error) {
 }
 
 // collectOwnedReservedRefs scans all reserved indexes and collects refs
-// for jobs owned by the given worker. Returns an empty slice if none found.
+// for jobs owned by the given worker. Orphaned reserved indexes (no matching
+// job record) are also collected so they can be cleaned up in the batch
+// requeue phase. Returns an empty slice if none found.
 func collectOwnedReservedRefs(database *badger.DB, workerID string) ([]reservedRef, error) {
 	var refs []reservedRef
 	err := database.View(func(txn *badger.Txn) error {
@@ -270,8 +272,9 @@ func collectOwnedReservedRefs(database *badger.DB, workerID string) ([]reservedR
 			// Load the job record to check worker ownership.
 			jobItem, jobErr := txn.Get(db.JobKey(ulidStr))
 			if jobErr != nil {
-				// Orphaned index; skip — will be cleaned up in the
-				// requeue batch if it still exists.
+				// Orphaned reserved index (job record missing); collect it for
+				// cleanup in the batch requeue phase.
+				refs = append(refs, reservedRef{queue: queueName, ulid: ulidStr})
 				continue
 			}
 
