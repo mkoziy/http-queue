@@ -122,10 +122,15 @@ func (s *Sweeper) expireWorkers() {
 }
 
 // expireReservations re-queues reservations that have exceeded their visibility timeout.
+// Collection happens in a read transaction; mutations happen in bounded write batches
+// to prevent unbounded key mutations in a single BadgerDB transaction.
 func (s *Sweeper) expireReservations() {
 	now := time.Now().UTC().Unix()
 
-	err := s.db.Update(func(txn *badger.Txn) error {
+	// Step 1: Collect expired reservation refs in a read transaction.
+	var refs []reservedRef
+
+	err := s.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
@@ -160,14 +165,66 @@ func (s *Sweeper) expireReservations() {
 			if len(parts) < 4 {
 				continue
 			}
-			queueName := parts[1]
-			ulidStr := parts[3]
+
+			refs = append(refs, reservedRef{
+				queue: parts[1],
+				ulid:  parts[3],
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("sweep: view expired reservations: %v", err)
+		return
+	}
+
+	// Step 2: Process refs in bounded write batches.
+	for batchIdx, batch := range batchSlice(refs, maintenanceBatchSize) {
+		if err := s.expireReservationBatch(now, batch); err != nil {
+			log.Printf("sweep: expire reservations batch %d: %v", batchIdx, err)
+		}
+	}
+}
+
+// expireReservationBatch re-queues or dead-letters a batch of expired reservation
+// refs in a single write transaction. Each ref is re-checked: the reserved index
+// must still exist and still be expired, and the job record is loaded fresh.
+func (s *Sweeper) expireReservationBatch(now int64, refs []reservedRef) error {
+	if len(refs) == 0 {
+		return nil
+	}
+
+	err := s.db.Update(func(txn *badger.Txn) error {
+		for _, ref := range refs {
+			reservedKey := db.ReservedIndexKey(ref.queue, ref.ulid)
+
+			// Re-check the reserved index still exists and is still expired.
+			reservedItem, err := txn.Get(reservedKey)
+			if err != nil {
+				// Already removed between collection and batch; skip.
+				continue
+			}
+
+			val, err := reservedItem.ValueCopy(nil)
+			if err != nil {
+				continue
+			}
+
+			expiryUnix, err := strconv.ParseInt(string(val), 10, 64)
+			if err != nil {
+				continue
+			}
+
+			if now < expiryUnix {
+				// No longer expired (was extended between collection and batch); skip.
+				continue
+			}
 
 			// Load job record.
-			jobItem, err := txn.Get(db.JobKey(ulidStr))
+			jobItem, err := txn.Get(db.JobKey(ref.ulid))
 			if err != nil {
 				// Orphaned index; delete it.
-				_ = txn.Delete(item.Key())
+				_ = txn.Delete(reservedKey)
 				continue
 			}
 
@@ -188,43 +245,44 @@ func (s *Sweeper) expireReservations() {
 				job.WorkerID = ""
 				updatedData, err := json.Marshal(job)
 				if err != nil {
-					return fmt.Errorf("marshal dead job %s: %w", ulidStr, err)
+					return fmt.Errorf("marshal dead job %s: %w", ref.ulid, err)
 				}
-				if err := txn.Delete(item.Key()); err != nil {
-					return fmt.Errorf("delete reserved index for dead job %s: %w", ulidStr, err)
+				if err := txn.Delete(reservedKey); err != nil {
+					return fmt.Errorf("delete reserved index for dead job %s: %w", ref.ulid, err)
 				}
-				if err := txn.Set(db.DeadIndexKey(queueName, ulidStr), nil); err != nil {
-					return fmt.Errorf("set dead index for job %s: %w", ulidStr, err)
+				if err := txn.Set(db.DeadIndexKey(ref.queue, ref.ulid), nil); err != nil {
+					return fmt.Errorf("set dead index for job %s: %w", ref.ulid, err)
 				}
-				if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
-					return fmt.Errorf("update dead job %s: %w", ulidStr, err)
+				if err := txn.Set(db.JobKey(ref.ulid), updatedData); err != nil {
+					return fmt.Errorf("update dead job %s: %w", ref.ulid, err)
 				}
-				log.Printf("sweep: job %s moved to dead-letter (max attempts)", ulidStr)
+				log.Printf("sweep: job %s moved to dead-letter (max attempts)", ref.ulid)
 			} else {
 				// Re-queue.
 				job.Status = StatusPending
 				job.WorkerID = ""
 				updatedData, err := json.Marshal(job)
 				if err != nil {
-					return fmt.Errorf("marshal re-queued job %s: %w", ulidStr, err)
+					return fmt.Errorf("marshal re-queued job %s: %w", ref.ulid, err)
 				}
-				if err := txn.Delete(item.Key()); err != nil {
-					return fmt.Errorf("delete expired reserved index for job %s: %w", ulidStr, err)
+				if err := txn.Delete(reservedKey); err != nil {
+					return fmt.Errorf("delete expired reserved index for job %s: %w", ref.ulid, err)
 				}
-				if err := txn.Set(db.PendingIndexKey(queueName, ulidStr), nil); err != nil {
-					return fmt.Errorf("set pending index for re-queued job %s: %w", ulidStr, err)
+				if err := txn.Set(db.PendingIndexKey(ref.queue, ref.ulid), nil); err != nil {
+					return fmt.Errorf("set pending index for re-queued job %s: %w", ref.ulid, err)
 				}
-				if err := txn.Set(db.JobKey(ulidStr), updatedData); err != nil {
-					return fmt.Errorf("update re-queued job %s: %w", ulidStr, err)
+				if err := txn.Set(db.JobKey(ref.ulid), updatedData); err != nil {
+					return fmt.Errorf("update re-queued job %s: %w", ref.ulid, err)
 				}
-				log.Printf("sweep: job %s re-queued (visibility timeout expired)", ulidStr)
+				log.Printf("sweep: job %s re-queued (visibility timeout expired)", ref.ulid)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		log.Printf("sweep: expire reservations: %v", err)
+		return fmt.Errorf("process expired reservation batch: %w", err)
 	}
+	return nil
 }
 
 // reconcile checks for orphaned records and fixes inconsistencies.

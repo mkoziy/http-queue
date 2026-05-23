@@ -813,6 +813,215 @@ func TestSweep_FullSweep_CleansExpiredState(t *testing.T) {
 	}
 }
 
+func TestSweep_ManyExpiredReservations_RequeuedAndDeadLettered(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+
+	// Register a single worker to own all reserved jobs.
+	workerID, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	// Create enough jobs to span multiple maintenance batches.
+	numJobs := maintenanceBatchSize + 10
+
+	// Split: first numRequeue jobs will be re-queued (attempts < MaxAttempts),
+	// remaining numDeadLetter jobs will be dead-lettered (attempts == MaxAttempts).
+	numDeadLetter := 5
+	numRequeue := numJobs - numDeadLetter
+
+	claimedRequeue := make([]*Job, 0, numRequeue)
+	claimedDead := make([]*Job, 0, numDeadLetter)
+
+	for i := 0; i < numJobs; i++ {
+		_, err := ScheduleJob(database, "batchqueue", json.RawMessage(`{"n":`+fmt.Sprintf("%d", i)+`}`))
+		if err != nil {
+			t.Fatalf("ScheduleJob %d: %v", i, err)
+		}
+
+		claimed, err := ClaimNextJob(database, "batchqueue", workerID, cfg.VisibilityTimeout)
+		if err != nil {
+			t.Fatalf("ClaimNextJob %d: %v", i, err)
+		}
+		if claimed == nil {
+			t.Fatalf("ClaimNextJob %d returned nil", i)
+		}
+
+		if i < numRequeue {
+			claimedRequeue = append(claimedRequeue, claimed)
+		} else {
+			claimedDead = append(claimedDead, claimed)
+		}
+	}
+
+	// Set the dead-letter batch jobs to MaxAttempts attempts.
+	for _, j := range claimedDead {
+		setJobFields(t, database, j.ID, struct {
+			Status   JobStatus
+			WorkerID string
+			Attempts int
+			Queue    string
+		}{
+			Status:   StatusReserved,
+			WorkerID: workerID,
+			Attempts: cfg.MaxAttempts,
+		})
+	}
+
+	// Expire all reservations by setting reserved index expiry to the past.
+	for _, j := range claimedRequeue {
+		setReservedExpiry(t, database, "batchqueue", j.ID, time.Now().UTC().Add(-1*time.Hour))
+	}
+	for _, j := range claimedDead {
+		setReservedExpiry(t, database, "batchqueue", j.ID, time.Now().UTC().Add(-1*time.Hour))
+	}
+
+	// Run sweep.
+	sweeper := NewSweeper(database, cfg)
+	sweeper.expireReservations()
+
+	// --- Verify re-queued jobs ---
+	for _, j := range claimedRequeue {
+		err := database.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(db.JobKey(j.ID))
+			if err != nil {
+				return err
+			}
+			data, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			var job Job
+			if err := json.Unmarshal(data, &job); err != nil {
+				return err
+			}
+			if job.Status != StatusPending {
+				t.Errorf("requeue job %s status = %q, want %q", j.ID, job.Status, StatusPending)
+			}
+			if job.WorkerID != "" {
+				t.Errorf("requeue job %s WorkerID = %q, want empty", j.ID, job.WorkerID)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("reading re-queued job %s: %v", j.ID, err)
+		}
+
+		// Verify pending index exists.
+		err = database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.PendingIndexKey("batchqueue", j.ID))
+			return err
+		})
+		if err != nil {
+			t.Errorf("requeue job %s: missing pending index", j.ID)
+		}
+
+		// Verify reserved index is gone.
+		err = database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey("batchqueue", j.ID))
+			return err
+		})
+		if err == nil {
+			t.Errorf("requeue job %s: reserved index still exists", j.ID)
+		}
+	}
+
+	// --- Verify dead-lettered jobs ---
+	for _, j := range claimedDead {
+		err := database.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(db.JobKey(j.ID))
+			if err != nil {
+				return err
+			}
+			data, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			var job Job
+			if err := json.Unmarshal(data, &job); err != nil {
+				return err
+			}
+			if job.Status != StatusDead {
+				t.Errorf("dead-letter job %s status = %q, want %q", j.ID, job.Status, StatusDead)
+			}
+			if job.WorkerID != "" {
+				t.Errorf("dead-letter job %s WorkerID = %q, want empty", j.ID, job.WorkerID)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("reading dead-letter job %s: %v", j.ID, err)
+		}
+
+		// Verify dead index exists.
+		err = database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.DeadIndexKey("batchqueue", j.ID))
+			return err
+		})
+		if err != nil {
+			t.Errorf("dead-letter job %s: missing dead index", j.ID)
+		}
+
+		// Verify reserved index is gone.
+		err = database.View(func(txn *badger.Txn) error {
+			_, err := txn.Get(db.ReservedIndexKey("batchqueue", j.ID))
+			return err
+		})
+		if err == nil {
+			t.Errorf("dead-letter job %s: reserved index still exists", j.ID)
+		}
+	}
+}
+
+func TestSweep_ExpiredReservation_BatchStillProcessedAfterPartialError(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+
+	// Create jobs in two different queues.
+	// One will have a bad (unparseable) reservation value that causes it to be
+	// skipped in collection; another valid one should still be processed.
+
+	// Job 1: valid expired reservation (should be re-queued).
+	_, err := ScheduleJob(database, "queue-a", json.RawMessage(`{"a":1}`))
+	if err != nil {
+		t.Fatalf("ScheduleJob: %v", err)
+	}
+	claimed1, err := ClaimNextJob(database, "queue-a", "worker-1", cfg.VisibilityTimeout)
+	if err != nil {
+		t.Fatalf("ClaimNextJob: %v", err)
+	}
+	setReservedExpiry(t, database, "queue-a", claimed1.ID, time.Now().UTC().Add(-1*time.Hour))
+
+	// Run expireReservations.
+	sweeper := NewSweeper(database, cfg)
+	sweeper.expireReservations()
+
+	// Verify job 1 was re-queued.
+	var j1 Job
+	err = database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(claimed1.ID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(data, &j1)
+	})
+	if err != nil {
+		t.Fatalf("reading job 1: %v", err)
+	}
+	if j1.Status != StatusPending {
+		t.Errorf("job 1 status = %q, want %q", j1.Status, StatusPending)
+	}
+}
+
 // ---- Sweeper Start/Stop ----
 
 func TestSweeper_Start_StopsOnContextCancel(t *testing.T) {

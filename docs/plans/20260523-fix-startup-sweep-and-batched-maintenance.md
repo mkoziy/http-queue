@@ -53,11 +53,11 @@ Fix the review comments by preventing startup from expiring durable workers befo
 - Modify: `queue/sweep.go`
 - Modify: `queue/sweep_test.go`
 
-- [ ] Refactor `expireReservations` to collect expired reservation refs in a read transaction, then process refs in bounded write batches.
-- [ ] Inside each batch write transaction, re-check the reserved index still exists and is still expired before updating the job.
-- [ ] Preserve existing behavior for missing job records, malformed records, re-queue vs dead-letter decisions, and log messages.
-- [ ] Ensure errors from one batch are logged without preventing later batches from being attempted when safe.
-- [ ] Add regression tests for many expired reservations, including both re-queued and dead-lettered jobs.
+- [x] Refactor `expireReservations` to collect expired reservation refs in a read transaction, then process refs in bounded write batches.
+- [x] Inside each batch write transaction, re-check the reserved index still exists and is still expired before updating the job.
+- [x] Preserve existing behavior for missing job records, malformed records, re-queue vs dead-letter decisions, and log messages.
+- [x] Ensure errors from one batch are logged without preventing later batches from being attempted when safe.
+- [x] Add regression tests for many expired reservations, including both re-queued and dead-lettered jobs.
 
 ### Task 5: Verify Invariants and Race Safety
 **Files:**
