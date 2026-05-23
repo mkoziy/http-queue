@@ -213,13 +213,13 @@ POST   /jobs/{id}/nack
 - Modify: `api/router.go`
 - Create: `api/router_test.go`
 
-- [ ] Implement `New(db *badger.DB, cfg *config.Config) http.Handler`
-- [ ] Wire admin routes through Basic Auth middleware using `cfg.AdminUser` and `cfg.AdminPass`
-- [ ] Wire worker routes through Bearer Auth middleware
-- [ ] Add stdlib path parsing helpers for queue names, worker IDs, and job IDs
-- [ ] Add route tests for method mismatches, unknown routes, and middleware assignment
-- [ ] Run `go test -race ./api -run Router`
-- [ ] Run `make lint` and require a green linter before continuing
+- [x] Implement `New(db *badger.DB, cfg *config.Config) http.Handler`
+- [x] Wire admin routes through Basic Auth middleware using `cfg.AdminUser` and `cfg.AdminPass`
+- [x] Wire worker routes through Bearer Auth middleware
+- [x] Add stdlib path parsing helpers for queue names, worker IDs, and job IDs
+- [x] Add route tests for method mismatches, unknown routes, and middleware assignment
+- [x] Run `go test -race ./api -run Router`
+- [x] Run `make lint` and require a green linter before continuing
 
 ### Task 12: Implement Main Server Lifecycle
 **Files:**

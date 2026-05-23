@@ -72,9 +72,9 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] `Load() (*Config, error)` reads from env with defaults
 
 ### 3. DB layer (`db/db.go`)
-- [ ] `Open(path string) (*badger.DB, error)` wrapper
-- [ ] Key builder helpers: `JobKey`, `PendingIndexKey`, `ReservedIndexKey`, `WorkerKey`
-- [ ] `Close()` with flush
+- [x] `Open(path string) (*badger.DB, error)` wrapper
+- [x] Key builder helpers: `JobKey`, `PendingIndexKey`, `ReservedIndexKey`, `WorkerKey`
+- [x] `Close()` with flush
 
 ### 4. Token package (`token/token.go`)
 - [x] `Generate() (plain, hashed string, error)` — crypto/rand 32 bytes, base64url plain, sha256 hash stored
@@ -82,11 +82,11 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] `Verify(plain, hashed string) bool`
 
 ### 5. Worker store (`queue/worker.go`)
-- [ ] `Worker` struct: `ID`, `TokenHash`, `LastSeen`, `RegisteredAt`
-- [ ] `RegisterWorker(db, cfg) (id, token string, err error)` — writes `worker:{id}` + `workertoken:{hash}` in one txn
-- [ ] `DeregisterWorker(db, id string) error` — scans for and requeues the worker's reserved jobs (reserved→pending), then deletes `worker:{id}` + `workertoken:{hash}` in one txn
-- [ ] `TouchWorker(db, id string) error` — debounced: update in-memory last-seen always; flush to BadgerDB only if >(`WorkerExpiry`/2) since last flush (tracked in `sync.Map`)
-- [ ] `WorkerByToken(db, plainToken string) (*Worker, error)` — hash token, seek `workertoken:{hash}` for worker-id, then load `worker:{id}`; O(1), no scan
+- [x] `Worker` struct: `ID`, `TokenHash`, `LastSeen`, `RegisteredAt`
+- [x] `RegisterWorker(db, cfg) (id, token string, err error)` — writes `worker:{id}` + `workertoken:{hash}` in one txn
+- [x] `DeregisterWorker(db, id string) error` — scans for and requeues the worker's reserved jobs (reserved→pending), then deletes `worker:{id}` + `workertoken:{hash}` in one txn
+- [x] `TouchWorker(db, id string) error` — debounced: update in-memory last-seen always; flush to BadgerDB only if >(`WorkerExpiry`/2) since last flush (tracked in `sync.Map`)
+- [x] `WorkerByToken(db, plainToken string) (*Worker, error)` — hash token, seek `workertoken:{hash}` for worker-id, then load `worker:{id}`; O(1), no scan
 
 ### 6. Job store (`queue/job.go`)
 - [x] `Job` struct: `ID`, `Queue`, `Payload json.RawMessage`, `Status`, `WorkerID`, `CreatedAt`, `Attempts int`
@@ -96,13 +96,13 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] `NackJob(db, jobID, workerID string) error` — verify worker owns it; if `Attempts >= MAX_ATTEMPTS` move to dead-letter (`queue:{queue}:dead:{ulid}`) else move reserved→pending index; all writes in one txn
 
 ### 7. Sweep (`queue/sweep.go`)
-- [ ] `Sweeper` struct with db, cfg, logger
-- [ ] `Start(ctx context.Context)` — ticker loop
-- [ ] `sweep()` — single pass:
+- [x] `Sweeper` struct with db, cfg, logger
+- [x] `Start(ctx context.Context)` — ticker loop
+- [x] `sweep()` — single pass:
   1. Scan `worker:*`, collect expired worker IDs (last-seen > `WorkerExpiry`), delete `worker:{id}` + `workertoken:{hash}` in one txn per worker
   2. Scan `queue:*:reserved:*`, re-queue expired reservations, reservations owned by expired workers, and reservations whose owner worker no longer exists: **delete reserved index + write pending index + update job status must be a single BadgerDB transaction** to prevent sweep/claim race
   3. Reconciliation: scan all `job:*` records with `status=reserved` and verify a matching `queue:*:reserved:*` key exists; re-queue orphans (crash recovery). Scan `queue:*:pending:*` and verify matching job record exists; delete phantom index keys.
-- [ ] Re-queue respects `MAX_ATTEMPTS`: if `job.Attempts >= MAX_ATTEMPTS`, move to dead-letter instead
+- [x] Re-queue respects `MAX_ATTEMPTS`: if `job.Attempts >= MAX_ATTEMPTS`, move to dead-letter instead
 
 ### 8. Middleware (`api/middleware.go`)
 - [x] `BasicAuth(user, pass string) func(http.Handler) http.Handler`
@@ -110,32 +110,32 @@ POST   /jobs/{id}/nack             re-queue immediately
 - [x] Context key type + helpers: `WorkerFromCtx(ctx) *queue.Worker`
 
 ### 9. Handlers — Admin jobs (`api/jobs.go`)
-- [ ] `POST /queues/{queue}/jobs` — decode `{"payload": {...}}`, call `ScheduleJob`, return 201 + job ID
+- [x] `POST /queues/{queue}/jobs` — decode `{"payload": {...}}`, call `ScheduleJob`, return 201 + job ID
 
 ### 10. Handlers — Admin workers (`api/workers.go`)
-- [ ] `POST /workers` — call `RegisterWorker`, return 201 + `{worker_id, token}`
-- [ ] `DELETE /workers/{id}` — call `DeregisterWorker`, return 204
+- [x] `POST /workers` — call `RegisterWorker`, return 201 + `{worker_id, token}`
+- [x] `DELETE /workers/{id}` — call `DeregisterWorker`, return 204
 
 ### 11. Handlers — Worker API (`api/workers.go` continued)
-- [ ] `GET /queues/{queue}/next` — call `ClaimNextJob`, return 200+JSON or 204
-- [ ] `POST /jobs/{id}/ack` — call `AckJob`, return 204
-- [ ] `POST /jobs/{id}/nack` — call `NackJob`, return 204
+- [x] `GET /queues/{queue}/next` — call `ClaimNextJob`, return 200+JSON or 204
+- [x] `POST /jobs/{id}/ack` — call `AckJob`, return 204
+- [x] `POST /jobs/{id}/nack` — call `NackJob`, return 204
 
 ### 12. Router (`api/router.go`)
-- [ ] `New(db, cfg) http.Handler` wires all routes with correct middleware
-- [ ] Path param extraction helper (stdlib: parse from URL path)
+- [x] `New(db, cfg) http.Handler` wires all routes with correct middleware
+- [x] Path param extraction helper (stdlib: parse from URL path)
 
 ### 13. Main (`main.go`)
-- [ ] Load config, open BadgerDB, build router
-- [ ] Start sweeper goroutine with context
-- [ ] Start BadgerDB value log GC ticker (every 1h, calls `db.RunValueLogGC(0.5)`) to prevent unbounded value log growth
-- [ ] `http.ListenAndServe` with graceful shutdown on SIGINT/SIGTERM
+- [x] Load config, open BadgerDB, build router
+- [x] Start sweeper goroutine with context
+- [x] Start BadgerDB value log GC ticker (every 1h, calls `db.RunValueLogGC(0.5)`) to prevent unbounded value log growth
+- [x] `http.ListenAndServe` with graceful shutdown on SIGINT/SIGTERM
 
 ### 14. Tests
-- [ ] `queue/job_test.go` — schedule, claim, ack, nack, double-claim race, nack at MAX_ATTEMPTS moves to dead-letter, queue name with `:` rejected
-- [ ] `queue/worker_test.go` — register, deregister (verify both `worker:` and `workertoken:` keys removed), token verify, `WorkerByToken` O(1) path
-- [ ] `queue/sweep_test.go` — expired reservation re-queue, expired worker job re-queue, reconciliation of orphaned job records, sweep+claim race (goroutines racing sweep and claim on same job)
-- [ ] `api/` — integration tests with real BadgerDB (each test gets a fresh `t.TempDir()`; defer `db.Close()`)
+- [x] `queue/job_test.go` — schedule, claim, ack, nack, double-claim race, nack at MAX_ATTEMPTS moves to dead-letter, queue name with `:` rejected
+- [x] `queue/worker_test.go` — register, deregister (verify both `worker:` and `workertoken:` keys removed), token verify, `WorkerByToken` O(1) path
+- [x] `queue/sweep_test.go` — expired reservation re-queue, expired worker job re-queue, reconciliation of orphaned job records, sweep+claim race (goroutines racing sweep and claim on same job)
+- [x] `api/` — integration tests with real BadgerDB (each test gets a fresh `t.TempDir()`; defer `db.Close()`)
 
 ### 15. Makefile + README
 - [x] `Makefile` with `build`, `test`, `lint`, `run` targets
