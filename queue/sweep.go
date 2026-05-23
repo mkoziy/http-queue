@@ -74,6 +74,13 @@ func (s *Sweeper) expireWorkers() {
 			}
 
 			if w.LastSeen.Before(expiryThreshold) {
+				// Check in-memory last-seen cache first — may be fresher than DB
+				// due to TouchWorker debounce.
+				if ls, ok := workerLastSeen.Load(w.ID); ok {
+					if lastSeen, ok := ls.(time.Time); ok && !lastSeen.Before(expiryThreshold) {
+						continue
+					}
+				}
 				expiredIDs = append(expiredIDs, w.ID)
 			}
 		}

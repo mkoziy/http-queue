@@ -380,6 +380,9 @@ func TestSweep_ExpiredWorker_Deregistered(t *testing.T) {
 
 	// Set its lastSeen to 1 hour ago (beyond WorkerExpiry of 5 minutes).
 	setWorkerLastSeen(t, database, id, time.Now().UTC().Add(-1*time.Hour))
+	// Clear in-memory cache to reflect that the worker stopped sending heartbeats.
+	workerLastSeen.Delete(id)
+	workerLastSeen.Delete("flush:" + id)
 
 	// Run sweep.
 	sweeper := NewSweeper(database, cfg)
@@ -475,6 +478,9 @@ func TestSweep_ExpiredWorker_RequeuesReservedJobs(t *testing.T) {
 
 	// Set worker lastSeen to the past to make it expired.
 	setWorkerLastSeen(t, database, id, time.Now().UTC().Add(-1*time.Hour))
+	// Clear in-memory cache to reflect that the worker stopped sending heartbeats.
+	workerLastSeen.Delete(id)
+	workerLastSeen.Delete("flush:" + id)
 
 	// Run full sweep (expireWorkers will deregister the worker, which requeues
 	// its reserved jobs).
@@ -717,6 +723,9 @@ func TestSweep_FullSweep_CleansExpiredState(t *testing.T) {
 
 	// Expire the worker by setting its lastSeen to the past.
 	setWorkerLastSeen(t, database, workerID, time.Now().UTC().Add(-1*time.Hour))
+	// Clear in-memory cache to reflect that the worker stopped sending heartbeats.
+	workerLastSeen.Delete(workerID)
+	workerLastSeen.Delete("flush:" + workerID)
 
 	// --- Set up expired reservation (for a different queue) ---
 	_, err = ScheduleJob(database, "otherqueue", json.RawMessage(`{"expired":"reservation"}`))

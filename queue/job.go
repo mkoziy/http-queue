@@ -14,6 +14,8 @@ import (
 	"github.com/mkoziy/http-queue/db"
 )
 
+const maxClaimRetries = 3
+
 // Sentinel errors for job operations.
 var (
 	// ErrInvalidQueueName is returned when a queue name contains ':'.
@@ -91,76 +93,94 @@ func ScheduleJob(database *badger.DB, queueName string, payload json.RawMessage)
 }
 
 // ClaimNextJob claims the next pending job from the queue for a worker.
+// Retries on BadgerDB transaction conflicts with a small backoff.
 func ClaimNextJob(database *badger.DB, queueName, workerID string, visibilityTimeout time.Duration) (*Job, error) {
 	expiry := time.Now().UTC().Add(visibilityTimeout).Unix()
 
 	var claimed *Job
+	var lastErr error
 
-	err := database.Update(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
+	for attempt := 0; attempt < maxClaimRetries; attempt++ {
+		claimed = nil
 
-		prefix := db.PendingPrefix(queueName)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			ulidStr := extractULIDFromIndexKey(string(item.Key()), queueName, "pending")
-			if ulidStr == "" {
-				continue
+		err := database.Update(func(txn *badger.Txn) error {
+			it := txn.NewIterator(badger.DefaultIteratorOptions)
+			defer it.Close()
+
+			prefix := db.PendingPrefix(queueName)
+			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+				item := it.Item()
+				ulidStr := extractULIDFromIndexKey(string(item.Key()), queueName, "pending")
+				if ulidStr == "" {
+					continue
+				}
+
+				// Read the job record.
+				jobItem, err := txn.Get(db.JobKey(ulidStr))
+				if err != nil {
+					// Orphaned index; delete it.
+					_ = txn.Delete(item.Key())
+					continue
+				}
+
+				jobData, err := jobItem.ValueCopy(nil)
+				if err != nil {
+					return fmt.Errorf("read job data: %w", err)
+				}
+
+				var job Job
+				if err := json.Unmarshal(jobData, &job); err != nil {
+					return fmt.Errorf("unmarshal job: %w", err)
+				}
+
+				// Update job to reserved.
+				job.Status = StatusReserved
+				job.WorkerID = workerID
+				job.Attempts++
+
+				newJobData, err := json.Marshal(job)
+				if err != nil {
+					return fmt.Errorf("marshal updated job: %w", err)
+				}
+
+				// Delete pending index.
+				if err := txn.Delete(item.Key()); err != nil {
+					return fmt.Errorf("delete pending index: %w", err)
+				}
+
+				// Write reserved index with expiry timestamp.
+				expiryStr := fmt.Sprintf("%d", expiry)
+				if err := txn.Set(db.ReservedIndexKey(queueName, job.ID), []byte(expiryStr)); err != nil {
+					return fmt.Errorf("set reserved index: %w", err)
+				}
+
+				// Update job record.
+				if err := txn.Set(db.JobKey(job.ID), newJobData); err != nil {
+					return fmt.Errorf("update job: %w", err)
+				}
+
+				claimed = &job
+				return nil
 			}
 
-			// Read the job record.
-			jobItem, err := txn.Get(db.JobKey(ulidStr))
-			if err != nil {
-				// Orphaned index; delete it.
-				_ = txn.Delete(item.Key())
-				continue
-			}
-
-			jobData, err := jobItem.ValueCopy(nil)
-			if err != nil {
-				return fmt.Errorf("read job data: %w", err)
-			}
-
-			var job Job
-			if err := json.Unmarshal(jobData, &job); err != nil {
-				return fmt.Errorf("unmarshal job: %w", err)
-			}
-
-			// Update job to reserved.
-			job.Status = StatusReserved
-			job.WorkerID = workerID
-			job.Attempts++
-
-			newJobData, err := json.Marshal(job)
-			if err != nil {
-				return fmt.Errorf("marshal updated job: %w", err)
-			}
-
-			// Delete pending index.
-			if err := txn.Delete(item.Key()); err != nil {
-				return fmt.Errorf("delete pending index: %w", err)
-			}
-
-			// Write reserved index with expiry timestamp.
-			expiryStr := fmt.Sprintf("%d", expiry)
-			if err := txn.Set(db.ReservedIndexKey(queueName, job.ID), []byte(expiryStr)); err != nil {
-				return fmt.Errorf("set reserved index: %w", err)
-			}
-
-			// Update job record.
-			if err := txn.Set(db.JobKey(job.ID), newJobData); err != nil {
-				return fmt.Errorf("update job: %w", err)
-			}
-
-			claimed = &job
 			return nil
+		})
+
+		if err == nil {
+			return claimed, nil
 		}
 
-		return nil
-	})
+		lastErr = err
+		if !errors.Is(err, badger.ErrConflict) {
+			break
+		}
 
-	if err != nil {
-		return nil, fmt.Errorf("claim next job: %w", err)
+		// Backoff briefly before retrying.
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("claim next job: %w", lastErr)
 	}
 
 	return claimed, nil
