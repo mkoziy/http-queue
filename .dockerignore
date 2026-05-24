@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+/vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build artefacts
+/bin/
+/dist/
+
+# Badger database data (local dev)
+/data/
+
+# Project tooling
+.ralpix
+.serena
+
+# Docs and development files
+README.md
+Makefile
+docs/
+
+# Test helpers
+tests/
