@@ -1,4 +1,10 @@
-.PHONY: lint build test run e2e
+.PHONY: lint build test run e2e docker-build docker-build-multi release
+
+# ── Configurable variables ─────────────────────────────────
+VERSION     ?= latest
+IMAGE       ?= ghcr.io/mkoziy/http-queue
+PLATFORMS   ?= linux/amd64,linux/arm64
+DOCKERFILE  ?= Dockerfile
 
 lint:
 	@if [ -n "$$(find . -name '*.go' -not -path './.git/*' 2>/dev/null | head -1)" ]; then \
@@ -34,3 +40,61 @@ e2e:
 	else \
 		echo "no Go source files found, skipping e2e"; \
 	fi
+
+# ── Docker targets ───────────────────────────────────────
+docker-build: test
+	docker build \
+		-t $(IMAGE):$(VERSION) \
+		-f $(DOCKERFILE) \
+		.
+
+docker-build-multi: test
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(IMAGE):$(VERSION) \
+		-f $(DOCKERFILE) \
+		--push \
+		.
+
+# ── Release target ────────────────────────────────────────
+release: test
+	@if [ -z "$(VERSION)" ] || [ "$(VERSION)" = "latest" ]; then \
+		echo "ERROR: VERSION is required (e.g. VERSION=1.0.0)"; \
+		exit 1; \
+	fi
+	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "ERROR: VERSION must be a semver string (e.g. 1.0.0)"; \
+		exit 1; \
+	fi
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "ERROR: working tree is dirty; commit or stash changes first"; \
+		exit 1; \
+	fi
+	@if [ "$$(git branch --show-current)" != "main" ]; then \
+		echo "ERROR: must be on main branch to release"; \
+		exit 1; \
+	fi
+	@if git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null 2>&1; then \
+		echo "ERROR: tag $(VERSION) already exists locally"; \
+		exit 1; \
+	fi
+	@if ! git ls-remote origin >/dev/null 2>&1; then \
+		echo "ERROR: cannot reach remote origin"; \
+		exit 1; \
+	fi
+	@if git ls-remote --tags origin "refs/tags/$(VERSION)" | grep -qF "refs/tags/$(VERSION)"; then \
+		echo "ERROR: tag $(VERSION) already exists on remote"; \
+		exit 1; \
+	fi
+	@echo "Building and pushing multi-arch images to $(IMAGE)..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(IMAGE):$(VERSION) \
+		-t $(IMAGE):latest \
+		-f $(DOCKERFILE) \
+		--push \
+		.
+	@echo "Creating and pushing git tag..."
+	git tag -a "$(VERSION)" -m "Release $(VERSION)"
+	git push origin "$(VERSION)"
+	@echo "Release $(VERSION) published: $(IMAGE):$(VERSION)"
