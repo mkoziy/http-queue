@@ -272,13 +272,13 @@ make release VERSION=1.0.0
 
 This will:
 
-1. Verify the working tree is clean and the tag does not already exist
-2. Run tests with the race detector
-3. Create an annotated git tag `1.0.0`
-4. Push the tag to `origin`
-5. Build and push multi-architecture images (`linux/amd64`, `linux/arm64`) to `ghcr.io/mkoziy/http-queue` as:
+1. Run tests with the race detector
+2. Verify the working tree is clean and the tag does not already exist
+3. Build and push multi-architecture images (`linux/amd64`, `linux/arm64`) to `ghcr.io/mkoziy/http-queue` as:
    - `ghcr.io/mkoziy/http-queue:1.0.0` (versioned)
    - `ghcr.io/mkoziy/http-queue:latest` (rolling)
+4. Create an annotated git tag `1.0.0`
+5. Push the tag to `origin`
 
 Use semantic versioning (`X.Y.Z`) for all releases.
 

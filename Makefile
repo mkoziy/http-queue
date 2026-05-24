@@ -53,7 +53,6 @@ docker-build-multi: test
 		--platform $(PLATFORMS) \
 		-t $(IMAGE):$(VERSION) \
 		-f $(DOCKERFILE) \
-		--load \
 		.
 
 # ── Release target ────────────────────────────────────────
@@ -68,6 +67,10 @@ release: test
 	fi
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "ERROR: working tree is dirty; commit or stash changes first"; \
+		exit 1; \
+	fi
+	@if [ "$$(git branch --show-current)" != "main" ]; then \
+		echo "ERROR: must be on main branch to release"; \
 		exit 1; \
 	fi
 	@if git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null 2>&1; then \
