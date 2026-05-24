@@ -21,20 +21,20 @@ Add a production Docker image build for `http-queue` and Makefile commands for l
 - Create: `Dockerfile`
 - Create: `.dockerignore`
 
-- [ ] Create a multi-stage `Dockerfile` using the project’s Go version from `go.mod`
-- [ ] Build a static production binary with `CGO_ENABLED=0`
-- [ ] Use a small runtime image and run the service as a non-root user
-- [ ] Expose port `8080` and set the binary as the container entrypoint
-- [ ] Add `.dockerignore` entries for `.git`, build artifacts, temp files, local Badger data, and editor files
+- [x] Create a multi-stage `Dockerfile` using the project’s Go version from `go.mod`
+- [x] Build a static production binary with `CGO_ENABLED=0`
+- [x] Use a small runtime image and run the service as a non-root user
+- [x] Expose port `8080` and set the binary as the container entrypoint
+- [x] Add `.dockerignore` entries for `.git`, build artifacts, temp files, local Badger data, and editor files
 
 ### Task 2: Add Docker build targets to Makefile
 **Files:**
 - Modify: `Makefile`
 
-- [ ] Add configurable variables: `VERSION`, `IMAGE`, `PLATFORMS`, and `DOCKERFILE`
-- [ ] Add a `docker-build` target that builds a local image tagged as `$(IMAGE):$(VERSION)`
-- [ ] Add a `docker-build-multi` or equivalent target using `docker buildx build`
-- [ ] Ensure Docker targets depend on existing verification where appropriate, such as `test` or `build`
+- [x] Add configurable variables: `VERSION`, `IMAGE`, `PLATFORMS`, and `DOCKERFILE`
+- [x] Add a `docker-build` target that builds a local image tagged as `$(IMAGE):$(VERSION)`
+- [x] Add a `docker-build-multi` or equivalent target using `docker buildx build`
+- [x] Ensure Docker targets depend on existing verification where appropriate, such as `test` or `build`
 
 ### Task 3: Add release target with tag publishing
 **Files:**
