@@ -53,6 +53,7 @@ docker-build-multi: test
 		--platform $(PLATFORMS) \
 		-t $(IMAGE):$(VERSION) \
 		-f $(DOCKERFILE) \
+		--load \
 		.
 
 # ── Release target ────────────────────────────────────────
@@ -73,9 +74,7 @@ release: test
 		echo "ERROR: tag $(VERSION) already exists"; \
 		exit 1; \
 	fi
-	git tag -a "$(VERSION)" -m "Release $(VERSION)"
-	git push origin "$(VERSION)"
-	@echo "Pushing multi-arch images to $(IMAGE)..."
+	@echo "Building and pushing multi-arch images to $(IMAGE)..."
 	docker buildx build \
 		--platform $(PLATFORMS) \
 		-t $(IMAGE):$(VERSION) \
@@ -83,4 +82,7 @@ release: test
 		-f $(DOCKERFILE) \
 		--push \
 		.
+	@echo "Images pushed. Creating and pushing git tag..."
+	git tag -a "$(VERSION)" -m "Release $(VERSION)"
+	git push origin "$(VERSION)"
 	@echo "Release $(VERSION) published: $(IMAGE):$(VERSION)"
