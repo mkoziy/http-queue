@@ -60,8 +60,8 @@ Add a production Docker image build for `http-queue` and Makefile commands for l
 **Files:**
 - Modify: `README.md`
 
-- [ ] Add a Docker section showing `make docker-build`
-- [ ] Add a sample `docker run` command with required `ADMIN_USER` and `ADMIN_PASS`
-- [ ] Add a release section showing `make release VERSION=1.0.0`
-- [ ] Mention default GHCR image name and supported platforms
-- [ ] Mention GHCR authentication prerequisite before release
+- [x] Add a Docker section showing `make docker-build`
+- [x] Add a sample `docker run` command with required `ADMIN_USER` and `ADMIN_PASS`
+- [x] Add a release section showing `make release VERSION=1.0.0`
+- [x] Mention default GHCR image name and supported platforms
+- [x] Mention GHCR authentication prerequisite before release

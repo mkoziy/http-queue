@@ -211,20 +211,90 @@ workertoken:{sha256-hex}          → worker-id (reverse index for O(1) bearer t
 │   ├── middleware.go     # BasicAuth, BearerAuth, logging
 │   ├── jobs.go          # POST /queues/{queue}/jobs handler
 │   └── workers.go       # Worker admin + claim/ack/nack handlers
-├── Makefile             # lint, build, test, run targets
+├── Dockerfile           # Multi-stage production Docker build
+├── Makefile             # lint, build, test, run, docker-build, docker-build-multi, release
+├── .dockerignore        # Docker build context exclusions
 └── .golangci.yml        # Linter configuration
 ```
+
+## Docker
+
+A multi-stage `Dockerfile` produces a statically linked binary in a minimal `alpine` runtime image. The service runs as a non-root user.
+
+### Build locally
+
+```bash
+make docker-build
+```
+
+This runs tests first, then builds a local image tagged as `ghcr.io/mkoziy/http-queue:latest` (overridable via `IMAGE` and `VERSION` variables):
+
+```bash
+# Custom image name / version
+make docker-build IMAGE=my-registry/http-queue VERSION=1.0.0
+```
+
+### Run the container
+
+```bash
+docker run --rm \
+  -e ADMIN_USER=admin \
+  -e ADMIN_PASS=secret \
+  -e BADGER_PATH=/data \
+  -v http-queue-data:/data \
+  -p 8080:8080 \
+  ghcr.io/mkoziy/http-queue:latest
+```
+
+Mount a volume for `BADGER_PATH` to persist queue state across container restarts.
+
+### Multi-architecture builds
+
+```bash
+make docker-build-multi
+```
+
+Uses `docker buildx` to build for the platforms specified in `PLATFORMS` (default: `linux/amd64,linux/arm64`).
+
+## Releasing
+
+Releases are published to GitHub Container Registry (GHCR) using the `release` Makefile target. Before running a release, ensure you are authenticated with GHCR:
+
+```bash
+echo $GITHUB_TOKEN | docker login ghcr.io -u mkoziy --password-stdin
+```
+
+### Create a release
+
+```bash
+make release VERSION=1.0.0
+```
+
+This will:
+
+1. Verify the working tree is clean and the tag does not already exist
+2. Run tests with the race detector
+3. Create an annotated git tag `1.0.0`
+4. Push the tag to `origin`
+5. Build and push multi-architecture images (`linux/amd64`, `linux/arm64`) to `ghcr.io/mkoziy/http-queue` as:
+   - `ghcr.io/mkoziy/http-queue:1.0.0` (versioned)
+   - `ghcr.io/mkoziy/http-queue:latest` (rolling)
+
+Use semantic versioning (`X.Y.Z`) for all releases.
 
 ## Development
 
 ### Available targets
 
 ```bash
-make lint    # Run golangci-lint
-make build   # Build (runs lint first)
-make test    # Run tests with race detector
-make run     # Quick start (set env vars first)
-make e2e     # Run end-to-end Hurl tests (starts server with isolated state)
+make lint                # Run golangci-lint
+make build               # Build (runs lint first)
+make test                # Run tests with race detector
+make run                 # Quick start (set env vars first)
+make e2e                 # Run end-to-end Hurl tests (starts server with isolated state)
+make docker-build        # Build local Docker image (runs tests first)
+make docker-build-multi  # Build multi-arch images via docker buildx
+make release             # Tag, push, and publish multi-arch images to GHCR
 ```
 
 ### Testing
