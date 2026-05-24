@@ -40,11 +40,11 @@ Add a production Docker image build for `http-queue` and Makefile commands for l
 **Files:**
 - Modify: `Makefile`
 
-- [ ] Add a `release` target requiring `VERSION=...`
-- [ ] Validate the version format, e.g. `1.0.0`
-- [ ] Fail fast if the git working tree is dirty or the tag already exists
-- [ ] Create an annotated git tag for `$(VERSION)`
-- [ ] Push the tag to `origin`
+- [x] Add a `release` target requiring `VERSION=...`
+- [x] Validate the version format, e.g. `1.0.0`
+- [x] Fail fast if the git working tree is dirty or the tag already exists
+- [x] Create an annotated git tag for `$(VERSION)`
+- [x] Push the tag to `origin`
 
 ### Task 4: Push multi-architecture images to GHCR
 **Files:**
