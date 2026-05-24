@@ -10,11 +10,11 @@ Add a production Docker image build for `http-queue` and Makefile commands for l
 - GitHub remote points to `github.com:mkoziy/http-queue.git`, so default GHCR image can be `ghcr.io/mkoziy/http-queue`
 
 ## Success Criteria
-- [ ] `make docker-build` builds a production container image locally
-- [ ] `make release VERSION=1.0.0` creates and pushes git tag `1.0.0`
-- [ ] `make release VERSION=1.0.0` builds and pushes multi-arch images to `ghcr.io/mkoziy/http-queue`
-- [ ] `make test` passes
-- [ ] `docker run --rm -e ADMIN_USER=admin -e ADMIN_PASS=secret -p 8080:8080 ghcr.io/mkoziy/http-queue:1.0.0` starts the service
+- [x] `make docker-build` builds a production container image locally
+- [x] `make release VERSION=1.0.0` creates and pushes git tag `1.0.0`
+- [x] `make release VERSION=1.0.0` builds and pushes multi-arch images to `ghcr.io/mkoziy/http-queue`
+- [x] `make test` passes
+- [x] `docker run --rm -e ADMIN_USER=admin -e ADMIN_PASS=secret -p 8080:8080 ghcr.io/mkoziy/http-queue:1.0.0` starts the service
 
 ### Task 1: Add production Docker build files
 **Files:**
