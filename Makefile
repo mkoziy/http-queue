@@ -75,7 +75,11 @@ release: test
 		exit 1; \
 	fi
 	@if git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null 2>&1; then \
-		echo "ERROR: tag $(VERSION) already exists"; \
+		echo "ERROR: tag $(VERSION) already exists locally"; \
+		exit 1; \
+	fi
+	@if git ls-remote --tags origin "refs/tags/$(VERSION)" | grep -q "refs/tags/$(VERSION)"; then \
+		echo "ERROR: tag $(VERSION) already exists on remote"; \
 		exit 1; \
 	fi
 	@echo "Building and pushing multi-arch images to $(IMAGE)..."
