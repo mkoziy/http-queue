@@ -78,7 +78,11 @@ release: test
 		echo "ERROR: tag $(VERSION) already exists locally"; \
 		exit 1; \
 	fi
-	@if git ls-remote --tags origin "refs/tags/$(VERSION)" | grep -q "refs/tags/$(VERSION)"; then \
+	@if ! git ls-remote origin >/dev/null 2>&1; then \
+		echo "ERROR: cannot reach remote origin"; \
+		exit 1; \
+	fi
+	@if git ls-remote --tags origin "refs/tags/$(VERSION)" | grep -qF "refs/tags/$(VERSION)"; then \
 		echo "ERROR: tag $(VERSION) already exists on remote"; \
 		exit 1; \
 	fi
