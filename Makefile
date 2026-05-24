@@ -75,3 +75,12 @@ release:
 	fi
 	git tag -a "$(VERSION)" -m "Release $(VERSION)"
 	git push origin "$(VERSION)"
+	@echo "Pushing multi-arch images to $(IMAGE)..."
+	DOCKER_BUILDKIT=1 docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(IMAGE):$(VERSION) \
+		-t $(IMAGE):latest \
+		-f $(DOCKERFILE) \
+		--push \
+		.
+	@echo "Release $(VERSION) published: $(IMAGE):$(VERSION)"

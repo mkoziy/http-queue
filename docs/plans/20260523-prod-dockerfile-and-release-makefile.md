@@ -50,11 +50,11 @@ Add a production Docker image build for `http-queue` and Makefile commands for l
 **Files:**
 - Modify: `Makefile`
 
-- [ ] Extend `release` to build and push images to GHCR after pushing the git tag
-- [ ] Use `docker buildx build --platform $(PLATFORMS) --push`
-- [ ] Tag pushed images as `$(IMAGE):$(VERSION)` and `$(IMAGE):latest`
-- [ ] Default `PLATFORMS` to `linux/amd64,linux/arm64`
-- [ ] Document that the user must already be authenticated with `docker login ghcr.io`
+- [x] Extend `release` to build and push images to GHCR after pushing the git tag
+- [x] Use `docker buildx build --platform $(PLATFORMS) --push`
+- [x] Tag pushed images as `$(IMAGE):$(VERSION)` and `$(IMAGE):latest`
+- [x] Default `PLATFORMS` to `linux/amd64,linux/arm64`
+- [x] Document that the user must already be authenticated with `docker login ghcr.io`
 
 ### Task 5: Document Docker and release workflow
 **Files:**
