@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+ARG BUILDPLATFORM TARGETOS TARGETARCH
 
 WORKDIR /src
 
@@ -14,7 +15,6 @@ RUN go mod download
 COPY . .
 
 # Build a statically linked binary
-ARG TARGETOS TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags="-s -w" \

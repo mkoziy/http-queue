@@ -48,7 +48,7 @@ docker-build: test
 		-f $(DOCKERFILE) \
 		.
 
-docker-build-multi:
+docker-build-multi: test
 	docker buildx build \
 		--platform $(PLATFORMS) \
 		-t $(IMAGE):$(VERSION) \
@@ -56,7 +56,7 @@ docker-build-multi:
 		.
 
 # ── Release target ────────────────────────────────────────
-release:
+release: test
 	@if [ -z "$(VERSION)" ] || [ "$(VERSION)" = "latest" ]; then \
 		echo "ERROR: VERSION is required (e.g. VERSION=1.0.0)"; \
 		exit 1; \
@@ -76,7 +76,7 @@ release:
 	git tag -a "$(VERSION)" -m "Release $(VERSION)"
 	git push origin "$(VERSION)"
 	@echo "Pushing multi-arch images to $(IMAGE)..."
-	DOCKER_BUILDKIT=1 docker buildx build \
+	docker buildx build \
 		--platform $(PLATFORMS) \
 		-t $(IMAGE):$(VERSION) \
 		-t $(IMAGE):latest \
