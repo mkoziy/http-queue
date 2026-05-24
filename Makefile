@@ -1,4 +1,4 @@
-.PHONY: lint build test run e2e docker-build docker-build-multi
+.PHONY: lint build test run e2e docker-build docker-build-multi release
 
 # ── Configurable variables ─────────────────────────────────
 VERSION     ?= latest
@@ -54,3 +54,24 @@ docker-build-multi:
 		-t $(IMAGE):$(VERSION) \
 		-f $(DOCKERFILE) \
 		.
+
+# ── Release target ────────────────────────────────────────
+release:
+	@if [ -z "$(VERSION)" ] || [ "$(VERSION)" = "latest" ]; then \
+		echo "ERROR: VERSION is required (e.g. VERSION=1.0.0)"; \
+		exit 1; \
+	fi
+	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "ERROR: VERSION must be a semver string (e.g. 1.0.0)"; \
+		exit 1; \
+	fi
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "ERROR: working tree is dirty; commit or stash changes first"; \
+		exit 1; \
+	fi
+	@if git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null 2>&1; then \
+		echo "ERROR: tag $(VERSION) already exists"; \
+		exit 1; \
+	fi
+	git tag -a "$(VERSION)" -m "Release $(VERSION)"
+	git push origin "$(VERSION)"
