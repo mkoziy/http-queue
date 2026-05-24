@@ -40,5 +40,6 @@ EXPOSE 8080
 USER appuser
 
 ENV PORT=8080
+ENV BADGER_PATH=/data
 
 ENTRYPOINT ["http-queue"]
