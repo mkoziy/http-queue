@@ -29,9 +29,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Ensure the default data directory exists and is writable by the non-root user
 RUN mkdir -p /data && chown appuser:appgroup /data
-
-# Bundle CA certificates from builder
-COPY --from=builder /etc/ssl/certs /etc/ssl/certs
+VOLUME /data
 
 # Copy the compiled binary
 COPY --from=builder /usr/local/bin/http-queue /usr/local/bin/http-queue

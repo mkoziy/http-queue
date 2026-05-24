@@ -254,7 +254,7 @@ Mount a volume for `BADGER_PATH` to persist queue state across container restart
 make docker-build-multi
 ```
 
-Uses `docker buildx` to build for the platforms specified in `PLATFORMS` (default: `linux/amd64,linux/arm64`).
+Uses `docker buildx` to build and push multi-arch images for the platforms specified in `PLATFORMS` (default: `linux/amd64,linux/arm64`). This target pushes to a registry, so you must be authenticated first (see [Releasing](#releasing) for login instructions). For local-only builds, use `make docker-build` instead.
 
 ## Releasing
 

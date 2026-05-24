@@ -53,6 +53,7 @@ docker-build-multi: test
 		--platform $(PLATFORMS) \
 		-t $(IMAGE):$(VERSION) \
 		-f $(DOCKERFILE) \
+		--push \
 		.
 
 # ── Release target ────────────────────────────────────────

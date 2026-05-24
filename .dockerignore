@@ -43,3 +43,5 @@ docs/
 
 # Test helpers
 tests/
+scripts/
+*.hurl
