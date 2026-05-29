@@ -115,11 +115,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `tests/chaos/main.go`
 
-- [ ] Define ledger structures for published jobs, successful claims, ACKs, NACKs, dead/stale workers, and anomalous HTTP responses.
-- [ ] After the run context ends, stop all actors, terminate the server cleanly, and open BadgerDB read-only.
-- [ ] Scan BadgerDB keys and reconstruct job records plus pending, reserved, dead, worker, and worker-token indexes.
-- [ ] Check the documented invariants and compare DB state against the orchestrator ledger.
-- [ ] Print a compact JSON failure report and exit non-zero if any invariant fails.
+- [x] Define ledger structures for published jobs, successful claims, ACKs, NACKs, dead/stale workers, and anomalous HTTP responses.
+- [x] After the run context ends, stop all actors, terminate the server cleanly, and open BadgerDB read-only.
+- [x] Scan BadgerDB keys and reconstruct job records plus pending, reserved, dead, worker, and worker-token indexes.
+- [x] Check the documented invariants and compare DB state against the orchestrator ledger.
+- [x] Print a compact JSON failure report and exit non-zero if any invariant fails.
 
 ### Task 9: Add Documentation For Running Chaos Tests
 

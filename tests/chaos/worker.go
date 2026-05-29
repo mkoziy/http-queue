@@ -160,18 +160,18 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 	switch action {
 	case actionACK:
 		status, err := p.ac.AckJob(ctx, jobID, ws.token)
-		if err == nil && status == 200 {
+		if err == nil && status == 204 {
 			p.stats.acks.Add(1)
 			p.ledger.recordACK(jobID, ws.workerID)
 		}
-		log.Info("ack result", "job_id", jobID, "status", status, "err", errStr(err), "expected", "200")
+		log.Info("ack result", "job_id", jobID, "status", status, "err", errStr(err), "expected", "204")
 
 	case actionNACK:
 		status, err := p.ac.NackJob(ctx, jobID, ws.token)
-		if err == nil {
+		if err == nil && status == 204 {
 			p.stats.nacks.Add(1)
 		}
-		log.Info("nack result", "job_id", jobID, "status", status, "err", errStr(err), "expected", "200 or 410")
+		log.Info("nack result", "job_id", jobID, "status", status, "err", errStr(err), "expected", "204")
 
 	case actionAbandon:
 		// Deliberately do nothing — visibility timeout will return job to pending.
@@ -188,12 +188,17 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 		}
 		status, err := p.ac.AckJob(ctx, jobID, ws.token)
 		p.stats.slowACKs.Add(1)
+		// If the sweep hasn't fired yet the ACK may still succeed; record it either way.
+		if err == nil && status == 204 {
+			p.stats.acks.Add(1)
+			p.ledger.recordACK(jobID, ws.workerID)
+		}
 		log.Info("slow_ack result", "job_id", jobID, "status", status, "err", errStr(err),
-			"expected", "409 or 404 (token expired)", "delay_ms", delay.Milliseconds())
+			"expected", "204 (if sweep hasn't fired) or 404/409", "delay_ms", delay.Milliseconds())
 
 	case actionDouble:
 		status1, err1 := p.ac.AckJob(ctx, jobID, ws.token)
-		if err1 == nil && status1 == 200 {
+		if err1 == nil && status1 == 204 {
 			p.stats.acks.Add(1)
 			p.ledger.recordACK(jobID, ws.workerID)
 		}
@@ -202,7 +207,7 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 		log.Info("double_ack result", "job_id", jobID,
 			"status1", status1, "err1", errStr(err1),
 			"status2", status2, "err2", errStr(err2),
-			"expected", "first 200, second 404 or 409")
+			"expected", "first 204, second 404 or 409")
 	}
 }
 

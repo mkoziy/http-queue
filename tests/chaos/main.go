@@ -377,9 +377,24 @@ func main() {
 
 	srv.stop()
 
-	log.Info("ledger summary", "published", led.publishedCount())
+	log.Info("ledger summary",
+		"published", led.publishedCount(),
+		"acked", led.ackedCount(),
+	)
 
-	log.Info("chaos run complete", "summary", stats.snapshot())
+	// Run the invariant audit now that the server is stopped and BadgerDB is released.
+	auditLog := actorLogger(log, "auditor")
+	auditFails := runAudit(badgerPath, led, &stats, auditLog)
+	if auditFails > 0 {
+		stats.invariantFails.Add(int64(auditFails))
+	}
+
+	log.Info("chaos run complete",
+		"summary", stats.snapshot(),
+		"seed", c.seed,
+		"run_id", runID,
+		"badger_path", badgerPath,
+	)
 
 	if !c.keepArtifacts {
 		if err := os.RemoveAll(tmpDir); err != nil {
@@ -388,7 +403,8 @@ func main() {
 	}
 
 	if fails := stats.invariantFails.Load(); fails > 0 {
-		log.Error("invariant failures detected", "count", fails)
+		log.Error("invariant failures detected", "count", fails,
+			"seed", c.seed, "run_id", runID, "badger_path", badgerPath)
 		os.Exit(1)
 	}
 }
