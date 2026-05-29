@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -309,6 +310,7 @@ func main() {
 	}
 
 	var stats counters
+	led := newLedger()
 
 	ac := &apiClient{
 		hc:        newClient(actorLogger(log, "http"), &stats),
@@ -318,15 +320,40 @@ func main() {
 		log:       actorLogger(log, "http"),
 		stats:     &stats,
 	}
-	_ = ac // used by publisher/worker tasks
+
+	// Build the run-scoped queue name set and canary marker.
+	queueNames := make([]string, c.queues)
+	for i := range queueNames {
+		queueNames[i] = fmt.Sprintf("chaos-q-%d", i)
+	}
+	canary := fmt.Sprintf("canary-%s", runID)
+
+	log.Info("queue set", "queues", queueNames, "canary", canary)
+
+	pubPool := &publisherPool{
+		n:      c.publishers,
+		queues: queueNames,
+		canary: canary,
+		ac:     ac,
+		log:    actorLogger(log, "publisher"),
+		stats:  &stats,
+		ledger: led,
+		seed:   c.seed,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.duration)
 	defer cancel()
 
-	// Placeholder: later tasks will wire publishers, workers, controller, and auditor here.
+	var wg sync.WaitGroup
+	pubPool.run(ctx, &wg)
+
+	// Placeholder: Task 6 adds worker pool, Task 7 adds controller.
 	<-ctx.Done()
+	wg.Wait()
 
 	srv.stop()
+
+	log.Info("ledger summary", "published", led.publishedCount())
 
 	log.Info("chaos run complete", "summary", stats.snapshot())
 

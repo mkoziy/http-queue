@@ -82,11 +82,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `tests/chaos/main.go`
 
-- [ ] Start `N` publisher goroutines that loop until context cancellation.
-- [ ] Randomly select queue names from a small run-scoped set and generate varied JSON payloads, including one canary payload per run.
-- [ ] Publish through `POST /queues/{queue}/jobs` with admin Basic Auth and randomized jitter/backoff.
-- [ ] Record every successful published job in a thread-safe ledger by job ID, queue, payload marker, and timestamp.
-- [ ] Log each publish attempt and successful job ID with latency and queue metadata.
+- [x] Start `N` publisher goroutines that loop until context cancellation.
+- [x] Randomly select queue names from a small run-scoped set and generate varied JSON payloads, including one canary payload per run.
+- [x] Publish through `POST /queues/{queue}/jobs` with admin Basic Auth and randomized jitter/backoff.
+- [x] Record every successful published job in a thread-safe ledger by job ID, queue, payload marker, and timestamp.
+- [x] Log each publish attempt and successful job ID with latency and queue metadata.
 
 ### Task 6: Implement Worker Pool And Edge Actions
 
