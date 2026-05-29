@@ -1,4 +1,4 @@
-.PHONY: lint build test run e2e docker-build docker-build-multi release
+.PHONY: lint build test run e2e chaos docker-build docker-build-multi release
 
 # ── Configurable variables ─────────────────────────────────
 VERSION     ?= latest
@@ -39,6 +39,13 @@ e2e:
 		./scripts/e2e-local.sh; \
 	else \
 		echo "no Go source files found, skipping e2e"; \
+	fi
+
+chaos:
+	@if [ -n "$$(find . -name '*.go' -not -path './.git/*' 2>/dev/null | head -1)" ]; then \
+		go run ./tests/chaos -duration=15s -publishers=3 -workers=5 -seed=1; \
+	else \
+		echo "no Go source files found, skipping chaos"; \
 	fi
 
 # ── Docker targets ───────────────────────────────────────
