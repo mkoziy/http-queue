@@ -292,6 +292,7 @@ make build               # Build (runs lint first)
 make test                # Run tests with race detector
 make run                 # Quick start (set env vars first)
 make e2e                 # Run end-to-end Hurl tests (starts server with isolated state)
+make chaos               # Run a short deterministic chaos test (15s, seed=1)
 make docker-build        # Build local Docker image (runs tests first)
 make docker-build-multi  # Build multi-arch images via docker buildx
 make release             # Tag, push, and publish multi-arch images to GHCR
@@ -307,6 +308,63 @@ make test
 go test -race ./queue/ -run TestScheduleAndClaim
 go test -race ./api/ -run TestAdminEndpoints
 ```
+
+### Chaos Tests
+
+The chaos test is a standalone Go orchestrator that builds and runs the real `http-queue` server against an isolated temporary BadgerDB directory, then exercises the full HTTP API under concurrent load with randomized fault scenarios: ACK, NACK, no-ACK abandon, slow-ACK past visibility timeout, double-ACK, worker-kill, stale-token probes, and server restarts. After the run it audits BadgerDB directly to verify all invariants.
+
+#### Quick run
+
+```bash
+make chaos
+# equivalent to:
+go run ./tests/chaos -duration=15s -publishers=3 -workers=5 -seed=1
+```
+
+#### Full options
+
+```bash
+go run ./tests/chaos \
+  -duration=30s \
+  -publishers=4 \
+  -workers=8 \
+  -seed=123 \
+  -queues=3 \
+  -restart-probability=0.15 \
+  -visibility-timeout=3s \
+  -worker-expiry=5s \
+  -sweep-interval=1s \
+  -max-attempts=3
+```
+
+#### Reproducing a failure
+
+Every run logs its seed on startup. When a run fails, re-run with the same seed to reproduce:
+
+```bash
+# Failed run logged: "seed":7392841056
+go run ./tests/chaos -duration=30s -publishers=4 -workers=8 -seed=7392841056
+```
+
+#### Keeping artifacts for debugging
+
+Pass `-keep-artifacts` to prevent the orchestrator from deleting the temporary directory and server binary after the run. The log line `"tmp_dir":"/tmp/chaos-..."` shows the path:
+
+```bash
+go run ./tests/chaos -duration=10s -seed=1 -keep-artifacts
+# Then inspect: /tmp/chaos-<run_id>-<pid>/badger/
+```
+
+#### How it works
+
+1. Builds the real `http-queue` binary into a temp directory.
+2. Starts the server with `PORT=0` (OS-assigned port), `PORT_FILE` for port discovery, isolated admin credentials, and fast chaos timings.
+3. Waits for readiness by polling `POST /workers` for a `401` response.
+4. Runs concurrent publisher goroutines (each with a per-goroutine seeded RNG) that publish to randomized queues.
+5. Runs concurrent worker goroutines that claim jobs and randomly ACK, NACK, abandon, slow-ACK, or double-ACK.
+6. Runs a controller goroutine that fires worker-kill events, burst publishes, server restarts, and stale-token probes at randomized intervals.
+7. After the duration elapses, stops all actors and the server, then opens BadgerDB read-only to audit all invariants.
+8. Exits non-zero and prints a JSON failure report if any invariant is violated.
 
 ### End-to-End Tests
 

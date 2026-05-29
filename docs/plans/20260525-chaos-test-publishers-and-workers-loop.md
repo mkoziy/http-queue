@@ -126,8 +126,8 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `README.md`
 
-- [ ] Add a “Chaos Tests” subsection under Development or Testing.
-- [ ] Document `make chaos` and direct `go run ./tests/chaos` usage.
-- [ ] Explain seed-based reproduction and include an example command using a failed seed.
-- [ ] Document that the chaos test builds and runs the real server with a temporary BadgerDB directory.
-- [ ] Mention `-keep-artifacts` for debugging failed runs.
+- [x] Add a “Chaos Tests” subsection under Development or Testing.
+- [x] Document `make chaos` and direct `go run ./tests/chaos` usage.
+- [x] Explain seed-based reproduction and include an example command using a failed seed.
+- [x] Document that the chaos test builds and runs the real server with a temporary BadgerDB directory.
+- [x] Mention `-keep-artifacts` for debugging failed runs.
