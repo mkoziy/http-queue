@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net/http"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -79,7 +83,7 @@ func newRNG(seed int64, salt uint64) *rand.Rand {
 	return rand.New(s)
 }
 
-// runID generates a short random identifier for this run.
+// genRunID generates a short random identifier for this run.
 func genRunID(rng *rand.Rand) string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 8)
@@ -106,6 +110,156 @@ func runLogger(runID string, seed int64) *slog.Logger {
 // actorLogger returns a child logger with an actor field added.
 func actorLogger(base *slog.Logger, actor string) *slog.Logger {
 	return base.With("actor", actor)
+}
+
+// serverMgr builds, starts, and restarts the real http-queue server process.
+type serverMgr struct {
+	binaryPath  string
+	portFile    string
+	badgerPath  string
+	adminUser   string
+	adminPass   string
+	c           cfg
+	log         *slog.Logger
+	proc        *exec.Cmd
+	baseURL     string
+}
+
+// build compiles the server binary into the temp directory.
+func (s *serverMgr) build() error {
+	s.log.Info("building server binary", "output", s.binaryPath)
+	cmd := exec.Command("go", "build", "-o", s.binaryPath, ".")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// serverEnv assembles the environment for a server process.
+func (s *serverMgr) serverEnv() []string {
+	return []string{
+		"PORT=0",
+		fmt.Sprintf("PORT_FILE=%s", s.portFile),
+		fmt.Sprintf("ADMIN_USER=%s", s.adminUser),
+		fmt.Sprintf("ADMIN_PASS=%s", s.adminPass),
+		fmt.Sprintf("BADGER_PATH=%s", s.badgerPath),
+		fmt.Sprintf("VISIBILITY_TIMEOUT=%s", s.c.visibilityTimeout),
+		fmt.Sprintf("WORKER_EXPIRY=%s", s.c.workerExpiry),
+		fmt.Sprintf("SWEEP_INTERVAL=%s", s.c.sweepInterval),
+		fmt.Sprintf("MAX_ATTEMPTS=%d", s.c.maxAttempts),
+		// fast debounce so workers expire quickly during chaos
+		"LAST_SEEN_DEBOUNCE=500ms",
+		// pass through PATH so the binary can find shared libs if needed
+		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+		fmt.Sprintf("HOME=%s", os.Getenv("HOME")),
+	}
+}
+
+// start launches the server process and waits until it is ready.
+func (s *serverMgr) start() error {
+	// Remove stale port file from a previous run.
+	_ = os.Remove(s.portFile)
+
+	cmd := exec.Command(s.binaryPath)
+	cmd.Env = s.serverEnv()
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start server: %w", err)
+	}
+	s.proc = cmd
+	s.log.Info("server process started", "pid", cmd.Process.Pid)
+
+	if err := s.waitReady(); err != nil {
+		_ = cmd.Process.Kill()
+		return err
+	}
+	return nil
+}
+
+// waitReady blocks until the server writes its port file and returns 401 on POST /workers.
+func (s *serverMgr) waitReady() error {
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		port, err := s.readPort()
+		if err != nil {
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		s.baseURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+		if s.probeReady() {
+			s.log.Info("server ready", "base_url", s.baseURL)
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("server did not become ready within 15s")
+}
+
+func (s *serverMgr) readPort() (int, error) {
+	data, err := os.ReadFile(s.portFile)
+	if err != nil {
+		return 0, err
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0, fmt.Errorf("invalid port file content: %q", data)
+	}
+	if port <= 0 {
+		return 0, fmt.Errorf("port not yet written")
+	}
+	return port, nil
+}
+
+func (s *serverMgr) probeReady() bool {
+	// An unauthenticated POST /workers returning 401 means the server is up.
+	resp, err := http.Post(s.baseURL+"/workers", "application/json", nil) //nolint:noctx
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusUnauthorized
+}
+
+// restart sends SIGTERM and waits up to 5 s, then kills, then starts fresh.
+func (s *serverMgr) restart() error {
+	s.log.Info("restarting server", "pid", s.proc.Process.Pid)
+	if err := s.proc.Process.Signal(sigTERM()); err != nil {
+		s.log.Warn("sigterm failed, killing", "err", err)
+		_ = s.proc.Process.Kill()
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.proc.Wait() }()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		s.log.Warn("server did not exit after SIGTERM, killing")
+		_ = s.proc.Process.Kill()
+		<-done
+	}
+
+	return s.start()
+}
+
+// stop terminates the server process gracefully.
+func (s *serverMgr) stop() {
+	if s.proc == nil || s.proc.Process == nil {
+		return
+	}
+	s.log.Info("stopping server", "pid", s.proc.Process.Pid)
+	if err := s.proc.Process.Signal(sigTERM()); err != nil {
+		_ = s.proc.Process.Kill()
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.proc.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = s.proc.Process.Kill()
+		<-done
+	}
+	s.log.Info("server stopped")
 }
 
 func main() {
@@ -135,8 +289,26 @@ func main() {
 		"keep_artifacts", c.keepArtifacts,
 	)
 
-	_ = adminPass // used in later tasks
 	_ = actorLogger
+
+	srv := &serverMgr{
+		binaryPath: fmt.Sprintf("%s/http-queue-chaos-server", tmpDir),
+		portFile:   fmt.Sprintf("%s/port", tmpDir),
+		badgerPath: badgerPath,
+		adminUser:  adminUser,
+		adminPass:  adminPass,
+		c:          c,
+		log:        actorLogger(log, "lifecycle"),
+	}
+
+	if err := srv.build(); err != nil {
+		log.Error("server build failed", "err", err)
+		os.Exit(1)
+	}
+	if err := srv.start(); err != nil {
+		log.Error("server start failed", "err", err)
+		os.Exit(1)
+	}
 
 	var stats counters
 
@@ -144,7 +316,10 @@ func main() {
 	defer cancel()
 
 	// Placeholder: later tasks will wire publishers, workers, controller, and auditor here.
+	_ = srv
 	<-ctx.Done()
+
+	srv.stop()
 
 	log.Info("chaos run complete", "summary", stats.snapshot())
 

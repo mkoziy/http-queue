@@ -60,11 +60,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `tests/chaos/main.go`
 
-- [ ] Build the server into a temporary binary with `go build -o <temp>/http-queue-chaos-server .`.
-- [ ] Start the server with `PORT=0`, `PORT_FILE=<temp>/port`, generated admin credentials, temporary `BADGER_PATH`, and fast chaos timing environment variables.
-- [ ] Wait for readiness by reading `PORT_FILE` and polling `POST /workers` until it returns `401`.
-- [ ] Implement graceful `SIGTERM` restart using the same BadgerDB path, with fallback kill on timeout.
-- [ ] Register cleanup that terminates the process and removes temp artifacts unless `-keep-artifacts` is set.
+- [x] Build the server into a temporary binary with `go build -o <temp>/http-queue-chaos-server .`.
+- [x] Start the server with `PORT=0`, `PORT_FILE=<temp>/port`, generated admin credentials, temporary `BADGER_PATH`, and fast chaos timing environment variables.
+- [x] Wait for readiness by reading `PORT_FILE` and polling `POST /workers` until it returns `401`.
+- [x] Implement graceful `SIGTERM` restart using the same BadgerDB path, with fallback kill on timeout.
+- [x] Register cleanup that terminates the process and removes temp artifacts unless `-keep-artifacts` is set.
 
 ### Task 4: Add Instrumented HTTP Client Helpers
 
