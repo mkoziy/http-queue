@@ -344,10 +344,23 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), c.duration)
 	defer cancel()
 
+	wrkPool := &workerPool{
+		n:      c.workers,
+		queues: queueNames,
+		ac:     ac,
+		log:    actorLogger(log, "worker"),
+		stats:  &stats,
+		ledger: led,
+		seed:   c.seed,
+		visTmt: c.visibilityTimeout,
+	}
+
 	var wg sync.WaitGroup
 	pubPool.run(ctx, &wg)
+	wrkPool.run(ctx, &wg)
+	_ = wrkPool // used by Task 7 controller
 
-	// Placeholder: Task 6 adds worker pool, Task 7 adds controller.
+	// Placeholder: Task 7 adds controller.
 	<-ctx.Done()
 	wg.Wait()
 

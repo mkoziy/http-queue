@@ -93,11 +93,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `tests/chaos/main.go`
 
-- [ ] Register each worker through `POST /workers` using admin Basic Auth and store `worker_id` plus bearer token.
-- [ ] Continuously poll `GET /queues/{queue}/next` with randomized queue selection and jitter.
-- [ ] On successful claim, record claim ownership in the ledger before simulating processing delay.
-- [ ] Randomly choose weighted actions: ACK, NACK, no-ACK abandon, slow ACK past visibility timeout, and double ACK.
-- [ ] Log every worker action with `worker_id`, job ID, queue, attempts, action, result status, and expected edge-case outcome.
+- [x] Register each worker through `POST /workers` using admin Basic Auth and store `worker_id` plus bearer token.
+- [x] Continuously poll `GET /queues/{queue}/next` with randomized queue selection and jitter.
+- [x] On successful claim, record claim ownership in the ledger before simulating processing delay.
+- [x] Randomly choose weighted actions: ACK, NACK, no-ACK abandon, slow ACK past visibility timeout, and double ACK.
+- [x] Log every worker action with `worker_id`, job ID, queue, attempts, action, result status, and expected edge-case outcome.
 
 ### Task 7: Add Chaos Controller Events
 
