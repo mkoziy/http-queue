@@ -49,11 +49,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Create: `tests/chaos/main.go`
 
-- [ ] Define CLI flags for `duration`, `publishers`, `workers`, `seed`, `queues`, `visibility-timeout`, `worker-expiry`, `sweep-interval`, `max-attempts`, `restart-probability`, and `keep-artifacts`.
-- [ ] Initialize a seeded RNG strategy that is concurrency-safe or provides per-goroutine child RNGs.
-- [ ] Generate a `run_id`, random admin credentials, and a temporary BadgerDB path.
-- [ ] Create a shared `slog` JSON logger that always includes `run_id`, `seed`, and actor fields.
-- [ ] Add summary counters for publishes, claims, ACKs, NACKs, abandoned jobs, slow ACKs, double ACKs, restarts, HTTP errors, and invariant failures.
+- [x] Define CLI flags for `duration`, `publishers`, `workers`, `seed`, `queues`, `visibility-timeout`, `worker-expiry`, `sweep-interval`, `max-attempts`, `restart-probability`, and `keep-artifacts`.
+- [x] Initialize a seeded RNG strategy that is concurrency-safe or provides per-goroutine child RNGs.
+- [x] Generate a `run_id`, random admin credentials, and a temporary BadgerDB path.
+- [x] Create a shared `slog` JSON logger that always includes `run_id`, `seed`, and actor fields.
+- [x] Add summary counters for publishes, claims, ACKs, NACKs, abandoned jobs, slow ACKs, double ACKs, restarts, HTTP errors, and invariant failures.
 
 ### Task 3: Implement Server Lifecycle Manager
 
