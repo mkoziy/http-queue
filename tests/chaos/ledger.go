@@ -31,10 +31,11 @@ type ackEntry struct {
 
 // ledger is the thread-safe orchestrator record of chaos events.
 type ledger struct {
-	mu        sync.Mutex
-	published map[string]publishedEntry // keyed by job ID
-	claims    map[string]claimEntry     // keyed by job ID (last claim wins on re-claim)
-	acks      map[string]ackEntry       // keyed by job ID
+	mu          sync.Mutex
+	published   map[string]publishedEntry // keyed by job ID
+	claims      map[string]claimEntry     // keyed by job ID (last claim wins on re-claim)
+	acks        map[string]ackEntry       // keyed by job ID
+	staleTokens []string                  // tokens from killed workers
 }
 
 func newLedger() *ledger {
@@ -43,6 +44,21 @@ func newLedger() *ledger {
 		claims:    make(map[string]claimEntry),
 		acks:      make(map[string]ackEntry),
 	}
+}
+
+func (l *ledger) addStaleToken(token string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.staleTokens = append(l.staleTokens, token)
+}
+
+// pickStaleTokens returns a snapshot of all stale tokens.
+func (l *ledger) pickStaleTokens() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([]string, len(l.staleTokens))
+	copy(out, l.staleTokens)
+	return out
 }
 
 func (l *ledger) recordPublish(id, queue, marker string, at time.Time) {

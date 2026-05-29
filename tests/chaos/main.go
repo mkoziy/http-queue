@@ -355,12 +355,23 @@ func main() {
 		visTmt: c.visibilityTimeout,
 	}
 
+	ctrl := &controller{
+		ac:          ac,
+		srv:         srv,
+		wrkPool:     wrkPool,
+		queues:      queueNames,
+		log:         actorLogger(log, "controller"),
+		stats:       &stats,
+		ledger:      led,
+		seed:        c.seed,
+		restartProb: c.restartProb,
+	}
+
 	var wg sync.WaitGroup
 	pubPool.run(ctx, &wg)
 	wrkPool.run(ctx, &wg)
-	_ = wrkPool // used by Task 7 controller
+	ctrl.run(ctx, &wg)
 
-	// Placeholder: Task 7 adds controller.
 	<-ctx.Done()
 	wg.Wait()
 

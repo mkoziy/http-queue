@@ -104,11 +104,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `tests/chaos/main.go`
 
-- [ ] Run a controller goroutine that wakes at randomized intervals until test cancellation.
-- [ ] Implement worker kill events by canceling selected worker goroutines and moving their tokens into a stale-token graveyard.
-- [ ] Implement burst publish events that synchronously enqueue a configurable burst of jobs.
-- [ ] Implement server `SIGTERM` restart events using the lifecycle manager and same BadgerDB path.
-- [ ] Implement stale-token probes that attempt claim/ACK/NACK requests with dead worker tokens and log expected `401` responses.
+- [x] Run a controller goroutine that wakes at randomized intervals until test cancellation.
+- [x] Implement worker kill events by canceling selected worker goroutines and moving their tokens into a stale-token graveyard.
+- [x] Implement burst publish events that synchronously enqueue a configurable burst of jobs.
+- [x] Implement server `SIGTERM` restart events using the lifecycle manager and same BadgerDB path.
+- [x] Implement stale-token probes that attempt claim/ACK/NACK requests with dead worker tokens and log expected `401` responses.
 
 ### Task 8: Implement Ledger And Final Auditor
 
