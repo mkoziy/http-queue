@@ -289,8 +289,6 @@ func main() {
 		"keep_artifacts", c.keepArtifacts,
 	)
 
-	_ = actorLogger
-
 	srv := &serverMgr{
 		binaryPath: fmt.Sprintf("%s/http-queue-chaos-server", tmpDir),
 		portFile:   fmt.Sprintf("%s/port", tmpDir),
@@ -312,11 +310,20 @@ func main() {
 
 	var stats counters
 
+	ac := &apiClient{
+		hc:        newClient(actorLogger(log, "http"), &stats),
+		baseURL:   srv.baseURL,
+		adminUser: adminUser,
+		adminPass: adminPass,
+		log:       actorLogger(log, "http"),
+		stats:     &stats,
+	}
+	_ = ac // used by publisher/worker tasks
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.duration)
 	defer cancel()
 
 	// Placeholder: later tasks will wire publishers, workers, controller, and auditor here.
-	_ = srv
 	<-ctx.Done()
 
 	srv.stop()

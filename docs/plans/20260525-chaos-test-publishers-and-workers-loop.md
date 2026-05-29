@@ -71,11 +71,11 @@ Add a standalone Go chaos orchestrator in `tests/chaos/main.go` that builds and 
 **Files:**
 - Modify: `tests/chaos/main.go`
 
-- [ ] Create an `http.Client` with timeout and `DisableKeepAlives: true`.
-- [ ] Wrap transport with a logging `RoundTripper` that records method, URL path, status, duration, request errors, and actor.
-- [ ] Implement helpers for admin-authenticated worker registration, worker deregistration, job publishing, claiming next jobs, ACK, and NACK.
-- [ ] Decode the actual response shapes: scheduled jobs return `id`; workers return `worker_id` and `token`; claims return `id`, `queue`, `payload`, and `attempts`.
-- [ ] Treat transient connection errors during restarts as expected retryable chaos events while still counting and logging them.
+- [x] Create an `http.Client` with timeout and `DisableKeepAlives: true`.
+- [x] Wrap transport with a logging `RoundTripper` that records method, URL path, status, duration, request errors, and actor.
+- [x] Implement helpers for admin-authenticated worker registration, worker deregistration, job publishing, claiming next jobs, ACK, and NACK.
+- [x] Decode the actual response shapes: scheduled jobs return `id`; workers return `worker_id` and `token`; claims return `id`, `queue`, `payload`, and `attempts`.
+- [x] Treat transient connection errors during restarts as expected retryable chaos events while still counting and logging them.
 
 ### Task 5: Implement Concurrent Publisher Pool
 
