@@ -369,6 +369,41 @@ h1 { font-size: clamp(32px, 5vw, 54px); line-height: 0.95; }
   background: var(--panel-2);
   border-radius: 14px;
 }
+.spread-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.spread-item {
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border-radius: 14px;
+}
+.spread-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.spread-label {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.spread-stats {
+  color: var(--muted);
+  font-size: 13px;
+}
+.spread-bar {
+  height: 10px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+}
+.spread-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
 .mono { font-family: var(--mono); font-size: 12px; word-break: break-word; }
 .toolbar {
   display: flex;
@@ -474,8 +509,74 @@ function metric(name, value) {
   return '<div class="metric"><div class="label">' + escapeHtml(name) + '</div><div class="value">' + escapeHtml(value) + '</div></div>';
 }
 
+function aggregateSpread(events, kind) {
+  const queue = new Map();
+  const workerClaims = new Map();
+  const workerAcks = new Map();
+  for (const ev of events) {
+    if (ev.queue) {
+      if (!queue.has(ev.queue)) queue.set(ev.queue, {published: 0, claimed: 0, acked: 0, nacked: 0});
+      const entry = queue.get(ev.queue);
+      if (ev.event_type === 'job_published') entry.published += 1;
+      if (ev.event_type === 'job_claimed') entry.claimed += 1;
+      if (ev.event_type === 'job_acked') entry.acked += 1;
+      if (ev.event_type === 'job_nacked') entry.nacked += 1;
+    }
+    if (ev.worker_id && ev.event_type === 'job_claimed') {
+      workerClaims.set(ev.worker_id, (workerClaims.get(ev.worker_id) || 0) + 1);
+    }
+    if (ev.worker_id && ev.event_type === 'job_acked' && ev.ok) {
+      workerAcks.set(ev.worker_id, (workerAcks.get(ev.worker_id) || 0) + 1);
+    }
+  }
+
+  if (kind === 'queue') {
+    return Array.from(queue.entries())
+      .map(([name, stats]) => ({name, value: stats.published, aux: stats}))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+  }
+
+  return Array.from(new Set([...workerClaims.keys(), ...workerAcks.keys()]))
+    .map((workerID) => ({
+      name: workerID,
+      value: workerClaims.get(workerID) || 0,
+      aux: {
+        claims: workerClaims.get(workerID) || 0,
+        acks: workerAcks.get(workerID) || 0,
+      },
+    }))
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+}
+
+function fairnessSummary(items) {
+  if (!items.length) return 'No data yet.';
+  const values = items.map(item => item.value);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (total === 0) return 'No data yet.';
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  return 'max-min spread ' + (max - min) + ' across ' + items.length + ' buckets';
+}
+
+function renderSpread(items, mode) {
+  if (!items.length) return '<div class="spread-item">No data.</div>';
+  const max = Math.max(...items.map(item => item.value), 1);
+  return items.map(item => {
+    const width = (item.value / max) * 100;
+    const stats = mode === 'queue'
+      ? 'published ' + item.aux.published + ' · claimed ' + item.aux.claimed + ' · acked ' + item.aux.acked + ' · nacked ' + item.aux.nacked
+      : 'claims ' + item.aux.claims + ' · acked ' + item.aux.acks;
+    return '<div class="spread-item">' +
+      '<div class="spread-top"><div class="spread-label">' + escapeHtml(item.name) + '</div><div class="spread-stats">' + escapeHtml(stats) + '</div></div>' +
+      '<div class="spread-bar"><div class="spread-fill" style="width:' + width + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
 function render(filtered) {
   const counters = summary.counters || {};
+  const queueSpread = aggregateSpread(events, 'queue');
+  const workerSpread = aggregateSpread(events, 'worker');
   const auditItems = (summary.audit.violations || []).map(v =>
     '<div class="audit-item"><strong>' + escapeHtml(v.rule) + '</strong><div class="subtitle">' + escapeHtml(v.detail) + '</div><div class="mono">' +
     escapeHtml([v.job_id, v.index_key].filter(Boolean).join(' ')) + '</div></div>'
@@ -530,6 +631,18 @@ function render(filtered) {
         '<h2>Audit</h2>' +
         '<div class="subtitle">' + (summary.audit.passed ? 'All invariants satisfied.' : 'Invariant failures require investigation.') + '</div>' +
         '<div class="audit-list">' + auditItems + '</div>' +
+      '</div>' +
+      '<div class="panel span-8">' +
+        '<h2>Queue Spread</h2>' +
+        '<div class="subtitle">Distribution view only. Queue selection is still randomized, not round robin.</div>' +
+        '<div class="detail-list"><div class="detail-item"><strong>Fairness</strong><div class="subtitle">' + escapeHtml(fairnessSummary(queueSpread)) + '</div></div></div>' +
+        '<div class="spread-list">' + renderSpread(queueSpread, 'queue') + '</div>' +
+      '</div>' +
+      '<div class="panel span-4">' +
+        '<h2>Worker Spread</h2>' +
+        '<div class="subtitle">Claims and successful ACKs by worker.</div>' +
+        '<div class="detail-list"><div class="detail-item"><strong>Fairness</strong><div class="subtitle">' + escapeHtml(fairnessSummary(workerSpread)) + '</div></div></div>' +
+        '<div class="spread-list">' + renderSpread(workerSpread, 'worker') + '</div>' +
       '</div>' +
       '<div class="panel span-12">' +
         '<h2>Timeline</h2>' +
