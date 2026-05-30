@@ -21,6 +21,7 @@
 # Build output
 /bin/
 /dist/
+.chaos
 
 # BadgerDB data
 data/
