@@ -58,6 +58,7 @@ type cfg struct {
 	maxAttempts       int
 	restartProb       float64
 	keepArtifacts     bool
+	reportPath        string
 }
 
 func parseFlags() cfg {
@@ -73,6 +74,7 @@ func parseFlags() cfg {
 	flag.IntVar(&c.maxAttempts, "max-attempts", 3, "max job attempts passed to server")
 	flag.Float64Var(&c.restartProb, "restart-probability", 0.0, "probability [0,1] of a server restart event per controller tick")
 	flag.BoolVar(&c.keepArtifacts, "keep-artifacts", false, "keep temp dir and server binary after the run")
+	flag.StringVar(&c.reportPath, "report", "", "output path for the self-contained HTML report")
 	flag.Parse()
 	return c
 }
@@ -115,20 +117,22 @@ func actorLogger(base *slog.Logger, actor string) *slog.Logger {
 
 // serverMgr builds, starts, and restarts the real http-queue server process.
 type serverMgr struct {
-	binaryPath  string
-	portFile    string
-	badgerPath  string
-	adminUser   string
-	adminPass   string
-	c           cfg
-	log         *slog.Logger
-	proc        *exec.Cmd
-	baseURL     string
+	binaryPath string
+	portFile   string
+	badgerPath string
+	adminUser  string
+	adminPass  string
+	c          cfg
+	log        *slog.Logger
+	events     *eventWriter
+	proc       *exec.Cmd
+	baseURL    string
 }
 
 // build compiles the server binary into the temp directory.
 func (s *serverMgr) build() error {
 	s.log.Info("building server binary", "output", s.binaryPath)
+	s.events.Write("info", "lifecycle", "server_built", map[string]any{"output": s.binaryPath})
 	cmd := exec.Command("go", "build", "-o", s.binaryPath, ".")
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -169,6 +173,7 @@ func (s *serverMgr) start() error {
 	}
 	s.proc = cmd
 	s.log.Info("server process started", "pid", cmd.Process.Pid)
+	s.events.Write("info", "lifecycle", "server_started", map[string]any{"pid": cmd.Process.Pid})
 
 	if err := s.waitReady(); err != nil {
 		_ = cmd.Process.Kill()
@@ -189,6 +194,7 @@ func (s *serverMgr) waitReady() error {
 		s.baseURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 		if s.probeReady() {
 			s.log.Info("server ready", "base_url", s.baseURL)
+			s.events.Write("info", "lifecycle", "server_ready", map[string]any{"base_url": s.baseURL})
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -224,6 +230,7 @@ func (s *serverMgr) probeReady() bool {
 // restart sends SIGTERM and waits up to 5 s, then kills, then starts fresh.
 func (s *serverMgr) restart() error {
 	s.log.Info("restarting server", "pid", s.proc.Process.Pid)
+	s.events.Write("info", "lifecycle", "server_restart_requested", map[string]any{"pid": s.proc.Process.Pid})
 	if err := s.proc.Process.Signal(sigTERM()); err != nil {
 		s.log.Warn("sigterm failed, killing", "err", err)
 		_ = s.proc.Process.Kill()
@@ -249,6 +256,7 @@ func (s *serverMgr) stop() {
 		return
 	}
 	s.log.Info("stopping server", "pid", s.proc.Process.Pid)
+	s.events.Write("info", "lifecycle", "server_stopping", map[string]any{"pid": s.proc.Process.Pid})
 	if err := s.proc.Process.Signal(sigTERM()); err != nil {
 		_ = s.proc.Process.Kill()
 	}
@@ -261,10 +269,12 @@ func (s *serverMgr) stop() {
 		<-done
 	}
 	s.log.Info("server stopped")
+	s.events.Write("info", "lifecycle", "server_stopped", nil)
 }
 
 func main() {
 	c := parseFlags()
+	startedAt := time.Now().UTC()
 
 	rootRNG := newRNG(c.seed, 0)
 	runID := genRunID(rootRNG)
@@ -276,8 +286,20 @@ func main() {
 		os.Exit(1)
 	}
 	badgerPath := fmt.Sprintf("%s/badger", tmpDir)
+	eventsPath := fmt.Sprintf("%s/events.jsonl", tmpDir)
+	summaryPath := fmt.Sprintf("%s/summary.json", tmpDir)
+	reportPath := c.reportPath
+	if reportPath == "" {
+		reportPath = defaultReportPath(runID)
+	}
 
 	log := runLogger(runID, c.seed)
+	events, err := newEventWriter(eventsPath, runID, c.seed)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create event log: %v\n", err)
+		os.Exit(1)
+	}
+
 	log.Info("chaos run starting",
 		"duration", c.duration.String(),
 		"publishers", c.publishers,
@@ -289,6 +311,18 @@ func main() {
 		"restart_probability", c.restartProb,
 		"keep_artifacts", c.keepArtifacts,
 	)
+	events.Write("info", "run", "run_started", map[string]any{
+		"duration":            c.duration.String(),
+		"publishers":          c.publishers,
+		"workers":             c.workers,
+		"queues":              c.queues,
+		"admin_user":          adminUser,
+		"badger_path":         badgerPath,
+		"tmp_dir":             tmpDir,
+		"restart_probability": c.restartProb,
+		"keep_artifacts":      c.keepArtifacts,
+		"report_path":         reportPath,
+	})
 
 	srv := &serverMgr{
 		binaryPath: fmt.Sprintf("%s/http-queue-chaos-server", tmpDir),
@@ -298,6 +332,7 @@ func main() {
 		adminPass:  adminPass,
 		c:          c,
 		log:        actorLogger(log, "lifecycle"),
+		events:     events,
 	}
 
 	if err := srv.build(); err != nil {
@@ -313,12 +348,13 @@ func main() {
 	led := newLedger()
 
 	ac := &apiClient{
-		hc:        newClient(actorLogger(log, "http"), &stats),
+		hc:        newClient(actorLogger(log, "http"), &stats, events),
 		baseURL:   srv.baseURL,
 		adminUser: adminUser,
 		adminPass: adminPass,
 		log:       actorLogger(log, "http"),
 		stats:     &stats,
+		events:    events,
 	}
 
 	// Build the run-scoped queue name set and canary marker.
@@ -329,6 +365,10 @@ func main() {
 	canary := fmt.Sprintf("canary-%s", runID)
 
 	log.Info("queue set", "queues", queueNames, "canary", canary)
+	events.Write("info", "run", "queues_configured", map[string]any{
+		"queue_names": queueNames,
+		"canary":      canary,
+	})
 
 	pubPool := &publisherPool{
 		n:      c.publishers,
@@ -339,6 +379,7 @@ func main() {
 		stats:  &stats,
 		ledger: led,
 		seed:   c.seed,
+		events: events,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.duration)
@@ -353,6 +394,7 @@ func main() {
 		ledger: led,
 		seed:   c.seed,
 		visTmt: c.visibilityTimeout,
+		events: events,
 	}
 
 	ctrl := &controller{
@@ -365,6 +407,7 @@ func main() {
 		ledger:      led,
 		seed:        c.seed,
 		restartProb: c.restartProb,
+		events:      events,
 	}
 
 	var wg sync.WaitGroup
@@ -381,13 +424,15 @@ func main() {
 		"published", led.publishedCount(),
 		"acked", led.ackedCount(),
 	)
+	events.Write("info", "run", "ledger_summary", map[string]any{
+		"published": led.publishedCount(),
+		"acked":     led.ackedCount(),
+	})
 
 	// Run the invariant audit now that the server is stopped and BadgerDB is released.
 	auditLog := actorLogger(log, "auditor")
-	auditFails := runAudit(badgerPath, led, &stats, auditLog)
-	if auditFails > 0 {
-		stats.invariantFails.Add(int64(auditFails))
-	}
+	events.Write("info", "auditor", "audit_started", map[string]any{"badger_path": badgerPath})
+	_, violations := runAudit(badgerPath, led, &stats, auditLog, events)
 
 	log.Info("chaos run complete",
 		"summary", stats.snapshot(),
@@ -395,6 +440,62 @@ func main() {
 		"run_id", runID,
 		"badger_path", badgerPath,
 	)
+	finishedAt := time.Now().UTC()
+	status := "passed"
+	if fails := stats.invariantFails.Load(); fails > 0 {
+		status = "failed"
+	}
+	events.Write("info", "run", "run_completed", map[string]any{
+		"summary":     stats.snapshot(),
+		"badger_path": badgerPath,
+		"status":      status,
+		"ok":          status == "passed",
+	})
+
+	sum := summary{
+		RunID:      runID,
+		Seed:       c.seed,
+		StartedAt:  startedAt,
+		FinishedAt: finishedAt,
+		DurationMS: finishedAt.Sub(startedAt).Milliseconds(),
+		Status:     status,
+		Config: map[string]any{
+			"duration":            c.duration.String(),
+			"publishers":          c.publishers,
+			"workers":             c.workers,
+			"queues":              c.queues,
+			"restart_probability": c.restartProb,
+			"visibility_timeout":  c.visibilityTimeout.String(),
+			"worker_expiry":       c.workerExpiry.String(),
+			"sweep_interval":      c.sweepInterval.String(),
+			"max_attempts":        c.maxAttempts,
+			"keep_artifacts":      c.keepArtifacts,
+		},
+		Counters: stats.snapshot(),
+		Artifacts: map[string]string{
+			"tmp_dir":      tmpDir,
+			"badger_path":  badgerPath,
+			"events_path":  eventsPath,
+			"summary_path": summaryPath,
+			"report_path":  reportPath,
+		},
+		ReproCommand: reproCommand(c),
+		Audit: auditSummary{
+			Passed:     len(violations) == 0,
+			Violations: violations,
+		},
+	}
+	if err := writeSummary(summaryPath, sum); err != nil {
+		log.Error("failed to write summary", "path", summaryPath, "err", err)
+	}
+	if err := events.Close(); err != nil {
+		log.Warn("failed to close event log", "path", eventsPath, "err", err)
+	}
+	if err := buildReport(eventsPath, summaryPath, reportPath); err != nil {
+		log.Error("failed to build HTML report", "path", reportPath, "err", err)
+	} else {
+		log.Info("chaos report written", "path", reportPath)
+	}
 
 	if !c.keepArtifacts {
 		if err := os.RemoveAll(tmpDir); err != nil {

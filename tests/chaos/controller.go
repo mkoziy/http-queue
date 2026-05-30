@@ -19,6 +19,7 @@ type controller struct {
 	ledger      *ledger
 	seed        int64
 	restartProb float64
+	events      *eventWriter
 }
 
 func (c *controller) run(ctx context.Context, wg *sync.WaitGroup) {
@@ -74,11 +75,15 @@ func (c *controller) doWorkerKill(ctx context.Context, rng interface{ IntN(int) 
 	}
 	c.ledger.addStaleToken(token)
 	log.Info("controller: worker killed", "idx", idx)
+	c.events.Write("info", "controller", "worker_killed", map[string]any{
+		"idx": idx,
+	})
 }
 
 func (c *controller) doBurstPublish(ctx context.Context, rng interface{ IntN(int) int }, log *slog.Logger) {
 	burst := 3 + rng.IntN(5) // 3–7 jobs
 	log.Info("controller: burst publish", "count", burst)
+	c.events.Write("info", "controller", "burst_publish", map[string]any{"count": burst})
 	for i := 0; i < burst; i++ {
 		if ctx.Err() != nil {
 			return
@@ -96,6 +101,11 @@ func (c *controller) doBurstPublish(ctx context.Context, rng interface{ IntN(int
 		c.stats.publishes.Add(1)
 		c.ledger.recordPublish(resp.ID, queue, "burst", time.Now())
 		log.Debug("burst job published", "job_id", resp.ID, "queue", queue)
+		c.events.Write("info", "controller", "job_published", map[string]any{
+			"job_id": resp.ID,
+			"queue":  queue,
+			"marker": "burst",
+		})
 	}
 }
 
@@ -109,6 +119,9 @@ func (c *controller) doServerRestart(ctx context.Context, log *slog.Logger) {
 	c.ac.baseURL = c.srv.baseURL
 	c.stats.restarts.Add(1)
 	log.Info("controller: server restarted", "new_base_url", c.srv.baseURL)
+	c.events.Write("info", "controller", "server_restarted", map[string]any{
+		"base_url": c.srv.baseURL,
+	})
 }
 
 func (c *controller) doStaleTokenProbe(ctx context.Context, rng interface{ IntN(int) int }, log *slog.Logger) {
@@ -137,4 +150,19 @@ func (c *controller) doStaleTokenProbe(ctx context.Context, rng interface{ IntN(
 
 	statusNACK, _ := c.ac.NackJob(ctx, fakeJobID, token)
 	log.Info("stale token probe nack", "status", statusNACK, "expected", "401 or 404")
+	c.events.Write("info", "controller", "stale_token_probe", map[string]any{
+		"queue":        queue,
+		"claim_job_id": claimID(claim),
+		"claim_ok":     err == nil && claim != nil,
+		"claim_err":    errStr(err),
+		"ack_status":   statusACK,
+		"nack_status":  statusNACK,
+	})
+}
+
+func claimID(claim *ClaimResp) string {
+	if claim == nil {
+		return ""
+	}
+	return claim.ID
 }

@@ -24,6 +24,7 @@ type workerPool struct {
 	ledger *ledger
 	seed   int64
 	visTmt time.Duration // visibility timeout, used to pace slow-ACK
+	events *eventWriter
 
 	mu      sync.Mutex
 	workers []*workerState // live registrations, for Task 7 kill events
@@ -39,9 +40,13 @@ func (p *workerPool) run(ctx context.Context, wg *sync.WaitGroup) {
 		resp, err := p.ac.RegisterWorker(ctx)
 		if err != nil {
 			p.log.Warn("worker registration failed, skipping goroutine", "err", err)
+			p.events.Write("warn", "worker", "worker_registration_failed", map[string]any{"err": err.Error()})
 			continue
 		}
 		p.log.Info("worker registered", "worker_id", resp.WorkerID)
+		p.events.Write("info", "worker", "worker_registered", map[string]any{
+			"worker_id": resp.WorkerID,
+		})
 
 		wctx, cancel := context.WithCancel(ctx)
 		ws := &workerState{workerID: resp.WorkerID, token: resp.Token, cancel: cancel}
@@ -141,6 +146,12 @@ func (p *workerPool) loop(ctx context.Context, wg *sync.WaitGroup, ws *workerSta
 		// Record claim before any processing delay.
 		p.stats.claims.Add(1)
 		p.ledger.recordClaim(claim.ID, claim.Queue, ws.workerID, claim.Attempts)
+		p.events.Write("info", "worker", "job_claimed", map[string]any{
+			"job_id":    claim.ID,
+			"queue":     claim.Queue,
+			"worker_id": ws.workerID,
+			"attempts":  claim.Attempts,
+		})
 
 		action := pickAction(rng)
 		log.Info("worker action",
@@ -164,6 +175,13 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 			p.stats.acks.Add(1)
 			p.ledger.recordACK(jobID, ws.workerID)
 		}
+		p.events.Write("info", "worker", "job_acked", map[string]any{
+			"job_id":    jobID,
+			"worker_id": ws.workerID,
+			"status":    status,
+			"err":       errStr(err),
+			"ok":        err == nil && status == 204,
+		})
 		log.Info("ack result", "job_id", jobID, "status", status, "err", errStr(err), "expected", "204")
 
 	case actionNACK:
@@ -171,11 +189,23 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 		if err == nil && status == 204 {
 			p.stats.nacks.Add(1)
 		}
+		p.events.Write("info", "worker", "job_nacked", map[string]any{
+			"job_id":    jobID,
+			"worker_id": ws.workerID,
+			"status":    status,
+			"err":       errStr(err),
+			"ok":        err == nil && status == 204,
+		})
 		log.Info("nack result", "job_id", jobID, "status", status, "err", errStr(err), "expected", "204")
 
 	case actionAbandon:
 		// Deliberately do nothing — visibility timeout will return job to pending.
 		p.stats.abandoned.Add(1)
+		p.events.Write("info", "worker", "job_abandoned", map[string]any{
+			"job_id":    jobID,
+			"worker_id": ws.workerID,
+			"queue":     claim.Queue,
+		})
 		log.Info("abandon", "job_id", jobID, "expected", "job returns to pending after visibility timeout")
 
 	case actionSlowACK:
@@ -193,6 +223,14 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 			p.stats.acks.Add(1)
 			p.ledger.recordACK(jobID, ws.workerID)
 		}
+		p.events.Write("info", "worker", "job_slow_ack", map[string]any{
+			"job_id":    jobID,
+			"worker_id": ws.workerID,
+			"status":    status,
+			"err":       errStr(err),
+			"delay_ms":  delay.Milliseconds(),
+			"ok":        err == nil && status == 204,
+		})
 		log.Info("slow_ack result", "job_id", jobID, "status", status, "err", errStr(err),
 			"expected", "204 (if sweep hasn't fired) or 404/409", "delay_ms", delay.Milliseconds())
 
@@ -204,6 +242,15 @@ func (p *workerPool) executeAction(ctx context.Context, ws *workerState, claim *
 		}
 		status2, err2 := p.ac.AckJob(ctx, jobID, ws.token)
 		p.stats.doubleACKs.Add(1)
+		p.events.Write("info", "worker", "job_double_ack", map[string]any{
+			"job_id":    jobID,
+			"worker_id": ws.workerID,
+			"status1":   status1,
+			"err1":      errStr(err1),
+			"status2":   status2,
+			"err2":      errStr(err2),
+			"ok":        err1 == nil && status1 == 204,
+		})
 		log.Info("double_ack result", "job_id", jobID,
 			"status1", status1, "err1", errStr(err1),
 			"status2", status2, "err2", errStr(err2),

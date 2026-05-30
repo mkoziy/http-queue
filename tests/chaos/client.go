@@ -32,6 +32,7 @@ type logRT struct {
 	base  http.RoundTripper
 	log   *slog.Logger
 	stats *counters
+	ev    *eventWriter
 }
 
 func (l *logRT) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -61,6 +62,13 @@ func (l *logRT) RoundTrip(req *http.Request) (*http.Response, error) {
 			)
 		}
 		l.stats.httpErrors.Add(1)
+		l.ev.Write("warn", "http", "http_error", map[string]any{
+			"method":      req.Method,
+			"path":        req.URL.Path,
+			"duration_ms": dur.Milliseconds(),
+			"err":         err.Error(),
+			"ok":          false,
+		})
 		return resp, err
 	}
 
@@ -70,11 +78,17 @@ func (l *logRT) RoundTrip(req *http.Request) (*http.Response, error) {
 		"status", status,
 		"duration_ms", dur.Milliseconds(),
 	)
+	l.ev.Write("debug", "http", "http_exchange", map[string]any{
+		"method":      req.Method,
+		"path":        req.URL.Path,
+		"status":      status,
+		"duration_ms": dur.Milliseconds(),
+	})
 	return resp, nil
 }
 
 // newClient returns an http.Client instrumented with logRT.
-func newClient(log *slog.Logger, stats *counters) *http.Client {
+func newClient(log *slog.Logger, stats *counters, events *eventWriter) *http.Client {
 	base := &http.Transport{
 		DisableKeepAlives: true,
 		DialContext: (&net.Dialer{
@@ -87,6 +101,7 @@ func newClient(log *slog.Logger, stats *counters) *http.Client {
 			base:  base,
 			log:   log,
 			stats: stats,
+			ev:    events,
 		},
 	}
 }
@@ -99,6 +114,7 @@ type apiClient struct {
 	adminPass string
 	log       *slog.Logger
 	stats     *counters
+	events    *eventWriter
 }
 
 // RegisterWorkerResp is the decoded body of POST /workers.

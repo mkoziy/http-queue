@@ -18,6 +18,7 @@ type publisherPool struct {
 	stats  *counters
 	ledger *ledger
 	seed   int64
+	events *eventWriter
 }
 
 // run launches all publisher goroutines and adds them to wg.
@@ -66,6 +67,12 @@ func (p *publisherPool) loop(ctx context.Context, wg *sync.WaitGroup, salt uint6
 			}
 			// Transient errors during restarts are expected; already counted in logRT.
 			log.Debug("publish attempt failed", "queue", queue, "err", err, "duration_ms", dur.Milliseconds())
+			p.events.Write("warn", "publisher", "publish_failed", map[string]any{
+				"queue":       queue,
+				"marker":      marker,
+				"duration_ms": dur.Milliseconds(),
+				"err":         err.Error(),
+			})
 		} else {
 			p.stats.publishes.Add(1)
 			p.ledger.recordPublish(resp.ID, queue, marker, time.Now())
@@ -75,6 +82,12 @@ func (p *publisherPool) loop(ctx context.Context, wg *sync.WaitGroup, salt uint6
 				"marker", marker,
 				"duration_ms", dur.Milliseconds(),
 			)
+			p.events.Write("info", "publisher", "job_published", map[string]any{
+				"job_id":      resp.ID,
+				"queue":       queue,
+				"marker":      marker,
+				"duration_ms": dur.Milliseconds(),
+			})
 		}
 
 		// Randomized jitter: 10–100 ms between publishes.

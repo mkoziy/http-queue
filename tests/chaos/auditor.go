@@ -31,15 +31,15 @@ type dbState struct {
 
 // violation records one invariant failure.
 type violation struct {
-	Rule    string `json:"rule"`
-	Detail  string `json:"detail"`
-	JobID   string `json:"job_id,omitempty"`
+	Rule     string `json:"rule"`
+	Detail   string `json:"detail"`
+	JobID    string `json:"job_id,omitempty"`
 	IndexKey string `json:"index_key,omitempty"`
 }
 
 // runAudit opens BadgerDB read-only, scans all keys, checks invariants, and
 // returns the number of failures. It logs each violation as a structured error.
-func runAudit(badgerPath string, led *ledger, stats *counters, log *slog.Logger) int {
+func runAudit(badgerPath string, led *ledger, stats *counters, log *slog.Logger, events *eventWriter) (int, []violation) {
 	opts := badger.DefaultOptions(badgerPath).
 		WithReadOnly(true).
 		WithLogger(nil)
@@ -48,7 +48,8 @@ func runAudit(badgerPath string, led *ledger, stats *counters, log *slog.Logger)
 	if err != nil {
 		log.Error("auditor: failed to open badger read-only", "err", err)
 		stats.invariantFails.Add(1)
-		return 1
+		events.Write("error", "auditor", "audit_failed", map[string]any{"err": err.Error(), "ok": false})
+		return 1, []violation{{Rule: "audit open failed", Detail: err.Error()}}
 	}
 	defer bdb.Close()
 
@@ -56,7 +57,8 @@ func runAudit(badgerPath string, led *ledger, stats *counters, log *slog.Logger)
 	if err != nil {
 		log.Error("auditor: scan failed", "err", err)
 		stats.invariantFails.Add(1)
-		return 1
+		events.Write("error", "auditor", "audit_failed", map[string]any{"err": err.Error(), "ok": false})
+		return 1, []violation{{Rule: "audit scan failed", Detail: err.Error()}}
 	}
 
 	log.Info("auditor: db scan complete",
@@ -76,6 +78,13 @@ func runAudit(badgerPath string, led *ledger, stats *counters, log *slog.Logger)
 		stats.invariantFails.Add(1)
 		data, _ := json.Marshal(v)
 		log.Error("invariant violation", "report", string(data))
+		events.Write("error", "auditor", "audit_failed", map[string]any{
+			"job_id":    v.JobID,
+			"index_key": v.IndexKey,
+			"rule":      v.Rule,
+			"detail":    v.Detail,
+			"ok":        false,
+		})
 	}
 
 	if len(violations) > 0 {
@@ -87,9 +96,10 @@ func runAudit(badgerPath string, led *ledger, stats *counters, log *slog.Logger)
 		fmt.Printf("CHAOS AUDIT FAILURE REPORT: %s\n", report)
 	} else {
 		log.Info("auditor: all invariants satisfied")
+		events.Write("info", "auditor", "audit_passed", map[string]any{"ok": true})
 	}
 
-	return len(violations)
+	return len(violations), violations
 }
 
 func scanDB(bdb *badger.DB) (*dbState, error) {
