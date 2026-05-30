@@ -258,27 +258,26 @@ Uses `docker buildx` to build and push multi-arch images for the platforms speci
 
 ## Releasing
 
-Releases are published to GitHub Container Registry (GHCR) using the `release` Makefile target. Before running a release, ensure you are authenticated with GHCR:
+Releases are published to GitHub Container Registry (GHCR) and GitHub Releases using the `release` Makefile target. Before running a release, ensure you are authenticated with both GHCR and the GitHub CLI:
 
 ```bash
 echo $GITHUB_TOKEN | docker login ghcr.io -u mkoziy --password-stdin
+gh auth login
 ```
 
 ### Create a release
 
 ```bash
-make release VERSION=1.0.0
+make release VERSION=0.1.1
 ```
 
 This will:
 
 1. Run tests with the race detector
-2. Verify the working tree is clean and the tag does not already exist
-3. Build and push multi-architecture images (`linux/amd64`, `linux/arm64`) to `ghcr.io/mkoziy/http-queue` as:
-   - `ghcr.io/mkoziy/http-queue:1.0.0` (versioned)
-   - `ghcr.io/mkoziy/http-queue:latest` (rolling)
-4. Create an annotated git tag `1.0.0`
-5. Push the tag to `origin`
+2. Verify the working tree is clean, the tag does not already exist, and `gh` is authenticated
+3. Build and push multi-architecture images (`linux/amd64`, `linux/arm64`) to `ghcr.io/mkoziy/http-queue` as `ghcr.io/mkoziy/http-queue:0.1.1` and `ghcr.io/mkoziy/http-queue:latest`
+4. Create and push an annotated git tag `0.1.1`
+5. Create a GitHub release titled `0.1.1` with notes generated from the git diff log since the previous release tag
 
 Use semantic versioning (`X.Y.Z`) for all releases.
 
@@ -295,7 +294,7 @@ make e2e                 # Run end-to-end Hurl tests (starts server with isolate
 make chaos               # Run a short deterministic chaos test (15s, seed=1)
 make docker-build        # Build local Docker image (runs tests first)
 make docker-build-multi  # Build multi-arch images via docker buildx
-make release             # Tag, push, and publish multi-arch images to GHCR
+make release             # Tag, push, publish multi-arch images, and create a GitHub release
 ```
 
 ### Testing

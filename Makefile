@@ -66,11 +66,11 @@ docker-build-multi: test
 # ── Release target ────────────────────────────────────────
 release: test
 	@if [ -z "$(VERSION)" ] || [ "$(VERSION)" = "latest" ]; then \
-		echo "ERROR: VERSION is required (e.g. VERSION=1.0.0)"; \
+		echo "ERROR: VERSION is required (e.g. VERSION=0.1.1)"; \
 		exit 1; \
 	fi
 	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
-		echo "ERROR: VERSION must be a semver string (e.g. 1.0.0)"; \
+		echo "ERROR: VERSION must be a semver string (e.g. 0.1.1)"; \
 		exit 1; \
 	fi
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -93,6 +93,14 @@ release: test
 		echo "ERROR: tag $(VERSION) already exists on remote"; \
 		exit 1; \
 	fi
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "ERROR: gh CLI is required for releases"; \
+		exit 1; \
+	fi
+	@if ! gh auth status >/dev/null 2>&1; then \
+		echo "ERROR: gh CLI is not authenticated"; \
+		exit 1; \
+	fi
 	@echo "Building and pushing multi-arch images to $(IMAGE)..."
 	docker buildx build \
 		--platform $(PLATFORMS) \
@@ -104,4 +112,28 @@ release: test
 	@echo "Creating and pushing git tag..."
 	git tag -a "$(VERSION)" -m "Release $(VERSION)"
 	git push origin "$(VERSION)"
+	@echo "Creating GitHub release with diff log..."
+	@prev_tag="$$(git tag --sort=-version:refname | grep -vx '$(VERSION)' | head -n1)"; \
+	notes_file="$$(mktemp)"; \
+	trap 'rm -f "$$notes_file"' EXIT; \
+	{ \
+		echo "# Release $(VERSION)"; \
+		echo; \
+		if [ -n "$$prev_tag" ]; then \
+			echo "## Diff since $$prev_tag"; \
+			echo; \
+			git log --no-merges --pretty=format:'- %h %s' "$$prev_tag..HEAD"; \
+		else \
+			echo "## Initial release"; \
+			echo; \
+			git log --no-merges --pretty=format:'- %h %s'; \
+		fi; \
+		echo; \
+		echo; \
+		echo "## Container image"; \
+		echo; \
+		echo "- \`$(IMAGE):$(VERSION)\`"; \
+		echo "- \`$(IMAGE):latest\`"; \
+	} > "$$notes_file"; \
+	gh release create "$(VERSION)" --title "$(VERSION)" --notes-file "$$notes_file"
 	@echo "Release $(VERSION) published: $(IMAGE):$(VERSION)"
