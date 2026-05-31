@@ -47,6 +47,9 @@ func TestHandleScheduleJob_Success(t *testing.T) {
 	if resp["created"] == nil || resp["created"] == "" {
 		t.Error("response missing or empty 'created'")
 	}
+	if ttl, ok := resp["ttl"]; !ok || ttl != nil {
+		t.Errorf("ttl = %v, want null", ttl)
+	}
 }
 
 func TestHandleScheduleJob_NullPayload(t *testing.T) {
@@ -85,6 +88,80 @@ func TestHandleScheduleJob_ExplicitNullPayload(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d; body = %q", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+func TestHandleScheduleJob_WithTTL(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	body := `{"payload":{"hello":"world"},"ttl":600}`
+	req := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(body))
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if ttl := resp["ttl"]; ttl != float64(600) {
+		t.Errorf("ttl = %v, want 600", ttl)
+	}
+}
+
+func TestHandleScheduleJob_NullTTL(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	body := `{"payload":{"hello":"world"},"ttl":null}`
+	req := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(body))
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+func TestHandleScheduleJob_InvalidTTL(t *testing.T) {
+	testCases := []string{
+		`{"payload":{"hello":"world"},"ttl":0}`,
+		`{"payload":{"hello":"world"},"ttl":-1}`,
+		`{"payload":{"hello":"world"},"ttl":"600"}`,
+	}
+
+	for _, body := range testCases {
+		t.Run(body, func(t *testing.T) {
+			database, cleanup := openTestDB(t)
+			defer cleanup()
+
+			cfg := testConfig()
+			router := New(database, cfg)
+
+			req := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(body))
+			req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+		})
 	}
 }
 

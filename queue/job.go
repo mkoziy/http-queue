@@ -44,6 +44,7 @@ type Job struct {
 	Status    JobStatus       `json:"status"`
 	WorkerID  string          `json:"workerID,omitempty"`
 	CreatedAt time.Time       `json:"createdAt"`
+	ExpiresAt *time.Time      `json:"expiresAt,omitempty"`
 	Attempts  int             `json:"attempts"`
 }
 
@@ -56,6 +57,11 @@ func validateQueueName(queue string) error {
 
 // ScheduleJob enqueues a new job into the given queue.
 func ScheduleJob(database *badger.DB, queueName string, payload json.RawMessage) (*Job, error) {
+	return ScheduleJobWithExpiry(database, queueName, payload, nil)
+}
+
+// ScheduleJobWithExpiry enqueues a new job into the given queue with an optional absolute expiry.
+func ScheduleJobWithExpiry(database *badger.DB, queueName string, payload json.RawMessage, expiresAt *time.Time) (*Job, error) {
 	if err := validateQueueName(queueName); err != nil {
 		return nil, err
 	}
@@ -66,6 +72,7 @@ func ScheduleJob(database *badger.DB, queueName string, payload json.RawMessage)
 		Payload:   payload,
 		Status:    StatusPending,
 		CreatedAt: time.Now().UTC(),
+		ExpiresAt: expiresAt,
 		Attempts:  0,
 	}
 
@@ -92,11 +99,22 @@ func ScheduleJob(database *badger.DB, queueName string, payload json.RawMessage)
 	return job, nil
 }
 
+func isJobExpired(job Job, now time.Time) bool {
+	return job.ExpiresAt != nil && !now.Before(*job.ExpiresAt)
+}
+
+func deleteJobWithIndexes(txn *badger.Txn, job Job, indexKeys ...[]byte) error {
+	for _, key := range indexKeys {
+		if err := txn.Delete(key); err != nil {
+			return err
+		}
+	}
+	return txn.Delete(db.JobKey(job.ID))
+}
+
 // ClaimNextJob claims the next pending job from the queue for a worker.
 // Retries on BadgerDB transaction conflicts with a small backoff.
 func ClaimNextJob(database *badger.DB, queueName, workerID string, visibilityTimeout time.Duration) (*Job, error) {
-	expiry := time.Now().UTC().Add(visibilityTimeout).Unix()
-
 	var claimed *Job
 	var lastErr error
 
@@ -104,6 +122,8 @@ func ClaimNextJob(database *badger.DB, queueName, workerID string, visibilityTim
 		claimed = nil
 
 		err := database.Update(func(txn *badger.Txn) error {
+			now := time.Now().UTC()
+			expiry := now.Add(visibilityTimeout).Unix()
 			it := txn.NewIterator(badger.DefaultIteratorOptions)
 			defer it.Close()
 
@@ -131,6 +151,13 @@ func ClaimNextJob(database *badger.DB, queueName, workerID string, visibilityTim
 				var job Job
 				if err := json.Unmarshal(jobData, &job); err != nil {
 					return fmt.Errorf("unmarshal job: %w", err)
+				}
+
+				if isJobExpired(job, now) {
+					if err := deleteJobWithIndexes(txn, job, item.Key()); err != nil {
+						return fmt.Errorf("delete expired pending job: %w", err)
+					}
+					continue
 				}
 
 				// Update job to reserved.
@@ -249,8 +276,17 @@ func NackJob(database *badger.DB, jobID, workerID string, maxAttempts int) error
 			return fmt.Errorf("job %s is not owned by worker %s: %w", jobID, workerID, ErrNotJobOwner)
 		}
 
+		now := time.Now().UTC()
+		reservedKey := db.ReservedIndexKey(job.Queue, jobID)
+		if isJobExpired(job, now) {
+			if err := deleteJobWithIndexes(txn, job, reservedKey); err != nil {
+				return fmt.Errorf("delete expired job: %w", err)
+			}
+			return nil
+		}
+
 		// Delete reserved index.
-		if err := txn.Delete(db.ReservedIndexKey(job.Queue, jobID)); err != nil {
+		if err := txn.Delete(reservedKey); err != nil {
 			return fmt.Errorf("delete reserved index: %w", err)
 		}
 
@@ -307,4 +343,3 @@ func extractULIDFromIndexKey(key, queue, index string) string {
 	}
 	return key[len(prefix):]
 }
-

@@ -20,6 +20,7 @@ A durable HTTP queue engine backed by [BadgerDB](https://github.com/dgraph-io/ba
 
 - **Claim-based pull** — no cursor contention; first worker to claim gets the job.
 - **Visibility timeout** — reserved jobs auto-re-queue if not acked in time.
+- **Per-job TTL** — jobs can expire individually via nullable `ttl` seconds on schedule.
 - **Dead-letter queue** — jobs exceeding `MAX_ATTEMPTS` are moved to dead-letter.
 - **Worker expiry** — workers that stop polling are automatically deregistered; their reserved jobs get re-queued.
 - **Debounced `LastSeen`** — in-memory cache reduces BadgerDB writes on the poll hot path.
@@ -28,11 +29,13 @@ A durable HTTP queue engine backed by [BadgerDB](https://github.com/dgraph-io/ba
 
 ## API
 
+OpenAPI spec: [openapi.yaml](./openapi.yaml)
+
 ### Admin endpoints (HTTP Basic Auth)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/queues/{queue}/jobs` | Schedule a new job |
+| `POST` | `/queues/{queue}/jobs` | Schedule a new job with optional `ttl` seconds |
 | `POST` | `/workers` | Register a new worker (returns bearer token) |
 | `DELETE` | `/workers/{id}` | Deregister a worker (re-queues its reserved jobs) |
 
@@ -112,7 +115,7 @@ Response (201 Created):
 ```bash
 curl -u admin:secret -X POST http://localhost:8080/queues/orders/jobs \
   -H "Content-Type: application/json" \
-  -d '{"payload": {"orderId": 42, "action": "process"}}'
+  -d '{"payload": {"orderId": 42, "action": "process"}, "ttl": 600}'
 ```
 
 Response (201 Created):
@@ -122,7 +125,8 @@ Response (201 Created):
   "id": "01JXXXXXXX...",
   "queue": "orders",
   "status": "pending",
-  "created": "2026-05-23T00:00:00Z"
+  "created": "2026-05-23T00:00:00Z",
+  "ttl": 600
 }
 ```
 
@@ -164,12 +168,31 @@ Response: 204 No Content.
 
 If the job's `attempts` count has reached `MAX_ATTEMPTS`, it is moved to the dead-letter queue instead of being re-queued.
 
+### Job TTL semantics
+
+`POST /queues/{queue}/jobs` accepts an optional `ttl` field:
+
+```json
+{
+  "payload": {"orderId": 42},
+  "ttl": 600
+}
+```
+
+- `ttl` may be omitted or set to `null` for no expiry
+- `ttl` must be a positive integer number of seconds when provided
+- expired `pending` jobs are deleted and never returned by `GET /queues/{queue}/next`
+- if a job was already claimed, `POST /jobs/{id}/ack` still succeeds even if wall-clock TTL has elapsed
+- if a claimed job has expired, `POST /jobs/{id}/nack` deletes it instead of re-queueing it
+- if a claimed job hits `visibility timeout` after its TTL elapsed, the sweeper deletes it instead of re-queueing it
+- jobs already moved to `dead-letter` remain stored even if their TTL is in the past
+
 ## Storage layout
 
 http-queue stores all state in BadgerDB using the following key scheme:
 
 ```
-job:{ulid}                        → JSON: {queue, payload, status, workerID, createdAt, attempts}
+job:{ulid}                        → JSON: {queue, payload, status, workerID, createdAt, expiresAt, attempts}
 queue:{queue}:pending:{ulid}      → "" (index only)
 queue:{queue}:reserved:{ulid}     → expiry-unix-timestamp (int64 string)
 queue:{queue}:dead:{ulid}         → "" (index only, jobs exceeding MAX_ATTEMPTS)

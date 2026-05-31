@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
 
@@ -33,6 +34,7 @@ func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) 
 
 	var body struct {
 		Payload json.RawMessage `json:"payload"`
+		TTL     *int64          `json:"ttl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -44,7 +46,18 @@ func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) 
 		body.Payload = json.RawMessage("null")
 	}
 
-	job, err := queue.ScheduleJob(h.db, queueName, body.Payload)
+	var expiresAt *time.Time
+	if body.TTL != nil {
+		if *body.TTL <= 0 {
+			respondError(w, http.StatusBadRequest, "ttl must be a positive integer number of seconds or null")
+			return
+		}
+
+		expiry := time.Now().UTC().Add(time.Duration(*body.TTL) * time.Second)
+		expiresAt = &expiry
+	}
+
+	job, err := queue.ScheduleJobWithExpiry(h.db, queueName, body.Payload, expiresAt)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -55,7 +68,7 @@ func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) 
 		"queue":   job.Queue,
 		"status":  job.Status,
 		"created": job.CreatedAt,
+		"ttl":     body.TTL,
 	})
 }
-
 
