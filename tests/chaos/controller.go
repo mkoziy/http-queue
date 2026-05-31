@@ -14,6 +14,7 @@ type controller struct {
 	srv         *serverMgr
 	wrkPool     *workerPool
 	queues      []string
+	visTmt      time.Duration
 	log         *slog.Logger
 	stats       *counters
 	ledger      *ledger
@@ -89,22 +90,29 @@ func (c *controller) doBurstPublish(ctx context.Context, rng interface{ IntN(int
 			return
 		}
 		queue := c.queues[rng.IntN(len(c.queues))]
+		ttl := pickTTLVariant(rng, c.visTmt)
 		payload := map[string]any{
-			"marker": fmt.Sprintf("burst-%d", rng.IntN(100000)),
-			"burst":  true,
+			"marker":      fmt.Sprintf("burst-%d", rng.IntN(100000)),
+			"burst":       true,
+			"ttl_variant": ttl.Name,
 		}
-		resp, err := c.ac.PublishJob(ctx, queue, payload)
+		if ttl.Seconds != nil {
+			payload["ttl_seconds"] = *ttl.Seconds
+		}
+		resp, err := c.ac.PublishJob(ctx, queue, payload, ttl.Seconds)
 		if err != nil {
 			log.Debug("burst publish failed", "err", err)
 			continue
 		}
 		c.stats.publishes.Add(1)
-		c.ledger.recordPublish(resp.ID, queue, "burst", time.Now())
-		log.Debug("burst job published", "job_id", resp.ID, "queue", queue)
+		c.ledger.recordPublish(resp.ID, queue, "burst", ttl.Name, ttl.Seconds, time.Now())
+		log.Debug("burst job published", "job_id", resp.ID, "queue", queue, "ttl_variant", ttl.Name)
 		c.events.Write("info", "controller", "job_published", map[string]any{
-			"job_id": resp.ID,
-			"queue":  queue,
-			"marker": "burst",
+			"job_id":      resp.ID,
+			"queue":       queue,
+			"marker":      "burst",
+			"ttl_variant": ttl.Name,
+			"ttl_seconds": ttl.SecondsValue(),
 		})
 	}
 }

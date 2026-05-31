@@ -284,100 +284,131 @@ const reportHTML = `<!doctype html>
 
 const reportCSS = `
 :root {
-  --bg: #f4efe7;
-  --panel: #fffaf3;
-  --panel-2: #f0e7da;
-  --text: #1d1a17;
-  --muted: #62584f;
-  --accent: #b84c2a;
-  --accent-2: #295f4e;
-  --danger: #aa2f2f;
-  --ok: #216a52;
-  --line: #d6c9b8;
-  --shadow: 0 14px 40px rgba(54, 37, 21, 0.08);
+  --bg: #f2f2f0;
+  --panel: #f8f8f6;
+  --panel-2: #efefec;
+  --text: #171717;
+  --muted: #5d5d58;
+  --line: #d6d6d1;
+  --line-strong: #a9a9a2;
+  --ok: #202020;
+  --danger: #111111;
   --mono: "SFMono-Regular", ui-monospace, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: Georgia, "Iowan Old Style", serif;
+  font-family: var(--sans);
   color: var(--text);
-  background:
-    radial-gradient(circle at top left, rgba(184,76,42,0.14), transparent 28rem),
-    radial-gradient(circle at right, rgba(41,95,78,0.12), transparent 24rem),
-    var(--bg);
+  background: var(--bg);
 }
 #app {
-  max-width: 1280px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 32px 20px 48px;
+  padding: 24px 20px 40px;
 }
 .hero, .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  box-shadow: var(--shadow);
+  border-radius: 0;
 }
 .hero {
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: 18px 20px 20px;
+  margin-bottom: 16px;
 }
 .eyebrow {
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 h1, h2, h3 { margin: 0; font-weight: 600; }
-h1 { font-size: clamp(32px, 5vw, 54px); line-height: 0.95; }
-.subtitle { color: var(--muted); margin-top: 10px; }
+h1 {
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+h2 {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.subtitle {
+  color: var(--muted);
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 72ch;
+}
 .status {
   display: inline-block;
-  margin-top: 18px;
-  padding: 8px 12px;
+  margin-top: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
-.status.passed { background: rgba(33,106,82,0.12); color: var(--ok); }
-.status.failed { background: rgba(170,47,47,0.12); color: var(--danger); }
+.status.passed { background: #ecece8; color: var(--ok); }
+.status.failed { background: #e5e5e1; color: var(--danger); }
 .grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 20px;
+  gap: 12px;
 }
 .span-8 { grid-column: span 8; }
 .span-4 { grid-column: span 4; }
 .span-12 { grid-column: span 12; }
-.panel { padding: 20px; }
+.panel { padding: 16px; }
 .metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
 }
 .metric {
   background: var(--panel-2);
-  border-radius: 16px;
-  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 10px 10px 12px;
 }
-.metric .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-.metric .value { font-size: 30px; margin-top: 8px; font-weight: 700; }
-.meta-list, .audit-list, .detail-list { display: grid; gap: 10px; margin-top: 16px; }
+.metric .label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.metric .value {
+  font-size: 24px;
+  margin-top: 8px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.meta-list, .audit-list, .detail-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
 .meta-item, .audit-item, .detail-item {
-  padding: 12px 14px;
+  padding: 12px;
   background: var(--panel-2);
-  border-radius: 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
 }
 .spread-list {
   display: grid;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 14px;
 }
 .spread-item {
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: var(--panel-2);
-  border-radius: 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
 }
 .spread-top {
   display: flex;
@@ -391,39 +422,49 @@ h1 { font-size: clamp(32px, 5vw, 54px); line-height: 0.95; }
 }
 .spread-stats {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 .spread-bar {
-  height: 10px;
+  height: 6px;
   margin-top: 10px;
-  border-radius: 999px;
-  background: #fff;
+  background: #dfdfda;
   overflow: hidden;
 }
 .spread-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: #111111;
 }
-.mono { font-family: var(--mono); font-size: 12px; word-break: break-word; }
+.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-word;
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 18px 0;
+  gap: 8px;
+  margin: 14px 0 12px;
 }
 .toolbar input, .toolbar select {
   border: 1px solid var(--line);
-  background: #fff;
-  border-radius: 12px;
-  padding: 10px 12px;
+  background: #fdfdfc;
+  border-radius: 0;
+  padding: 9px 10px;
   font: inherit;
 }
-.timeline { display: grid; gap: 10px; max-height: 760px; overflow: auto; }
+.timeline {
+  display: grid;
+  gap: 8px;
+  max-height: 760px;
+  overflow: auto;
+  padding-right: 2px;
+}
 .event {
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #fff;
+  border-radius: 0;
+  background: #fcfcfa;
 }
 .event-top {
   display: flex;
@@ -433,43 +474,43 @@ h1 { font-size: clamp(32px, 5vw, 54px); line-height: 0.95; }
 }
 .event-kind {
   font-family: var(--mono);
-  font-size: 13px;
-  color: var(--accent);
+  font-size: 12px;
+  color: var(--text);
 }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .chip {
   font-family: var(--mono);
   font-size: 11px;
-  background: var(--panel-2);
+  background: transparent;
   color: var(--muted);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 5px 8px;
+  padding: 4px 7px;
 }
 .bar {
   display: flex;
-  height: 12px;
+  height: 8px;
   margin-top: 14px;
-  border-radius: 999px;
   overflow: hidden;
-  background: var(--panel-2);
+  background: #dfdfda;
 }
-.segment-a { background: var(--accent); }
-.segment-b { background: var(--accent-2); }
-.segment-c { background: #8f6b3c; }
-.segment-d { background: #57738a; }
-.segment-e { background: #9f4d7f; }
+.segment-a { background: #111111; }
+.segment-b { background: #3a3a37; }
+.segment-c { background: #62625d; }
+.segment-d { background: #8c8c85; }
+.segment-e { background: #b0b0a9; }
 button.copy {
-  border: 0;
-  border-radius: 12px;
-  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 8px 10px;
   font: inherit;
-  background: var(--accent);
-  color: #fff;
+  background: #f4f4f2;
+  color: var(--text);
   cursor: pointer;
 }
 @media (max-width: 920px) {
   .span-8, .span-4, .span-12 { grid-column: span 12; }
-  #app { padding: 18px 14px 28px; }
+  #app { padding: 14px 12px 24px; }
 }
 `
 
@@ -548,6 +589,32 @@ function aggregateSpread(events, kind) {
     .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
 }
 
+function aggregateTTL(events) {
+  const variants = new Map();
+  let withTTL = 0;
+  let withoutTTL = 0;
+
+  for (const ev of events) {
+    if (ev.event_type !== 'job_published') continue;
+    const variant = ev.fields && ev.fields.ttl_variant ? String(ev.fields.ttl_variant) : 'unknown';
+    variants.set(variant, (variants.get(variant) || 0) + 1);
+
+    if (ev.fields && ev.fields.ttl_seconds !== undefined && ev.fields.ttl_seconds !== null) {
+      withTTL += 1;
+    } else {
+      withoutTTL += 1;
+    }
+  }
+
+  return {
+    withTTL,
+    withoutTTL,
+    variants: Array.from(variants.entries())
+      .map(([name, value]) => ({name, value}))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)),
+  };
+}
+
 function fairnessSummary(items) {
   if (!items.length) return 'No data yet.';
   const values = items.map(item => item.value);
@@ -573,10 +640,23 @@ function renderSpread(items, mode) {
   }).join('');
 }
 
+function renderTTLSpread(items) {
+  if (!items.length) return '<div class="spread-item">No TTL publish data.</div>';
+  const max = Math.max(...items.map(item => item.value), 1);
+  return items.map(item => {
+    const width = (item.value / max) * 100;
+    return '<div class="spread-item">' +
+      '<div class="spread-top"><div class="spread-label">' + escapeHtml(item.name) + '</div><div class="spread-stats">' + escapeHtml(item.value + ' jobs') + '</div></div>' +
+      '<div class="spread-bar"><div class="spread-fill" style="width:' + width + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
 function render(filtered) {
   const counters = summary.counters || {};
   const queueSpread = aggregateSpread(events, 'queue');
   const workerSpread = aggregateSpread(events, 'worker');
+  const ttlStats = aggregateTTL(events);
   const auditItems = (summary.audit.violations || []).map(v =>
     '<div class="audit-item"><strong>' + escapeHtml(v.rule) + '</strong><div class="subtitle">' + escapeHtml(v.detail) + '</div><div class="mono">' +
     escapeHtml([v.job_id, v.index_key].filter(Boolean).join(' ')) + '</div></div>'
@@ -601,9 +681,9 @@ function render(filtered) {
 
   app.innerHTML = '' +
     '<section class="hero">' +
-      '<div class="eyebrow">Chaos Binary Report</div>' +
+      '<div class="eyebrow">Chaos Report</div>' +
       '<h1>' + escapeHtml(summary.run_id) + '</h1>' +
-      '<div class="subtitle">Seed ' + escapeHtml(summary.seed) + ' · ' + escapeHtml(summary.config.duration) + ' · ' + escapeHtml(filtered.length) + ' visible events</div>' +
+      '<div class="subtitle">Post-run forensic view for queue behavior, worker distribution, and invariant outcome. Seed ' + escapeHtml(summary.seed) + ', duration ' + escapeHtml(summary.config.duration) + ', ' + escapeHtml(filtered.length) + ' visible events.</div>' +
       '<div class="status ' + escapeHtml(summary.status) + '">' + escapeHtml(summary.status.toUpperCase()) + '</div>' +
     '</section>' +
     '<section class="grid">' +
@@ -634,20 +714,30 @@ function render(filtered) {
       '</div>' +
       '<div class="panel span-8">' +
         '<h2>Queue Spread</h2>' +
-        '<div class="subtitle">Distribution view only. Queue selection is still randomized, not round robin.</div>' +
+        '<div class="subtitle">Published, claimed, acked, and nacked counts by queue. This is a distribution view, not a scheduler fairness guarantee.</div>' +
         '<div class="detail-list"><div class="detail-item"><strong>Fairness</strong><div class="subtitle">' + escapeHtml(fairnessSummary(queueSpread)) + '</div></div></div>' +
         '<div class="spread-list">' + renderSpread(queueSpread, 'queue') + '</div>' +
       '</div>' +
       '<div class="panel span-4">' +
         '<h2>Worker Spread</h2>' +
-        '<div class="subtitle">Claims and successful ACKs by worker.</div>' +
+        '<div class="subtitle">Claims and successful acknowledgements by worker identity.</div>' +
         '<div class="detail-list"><div class="detail-item"><strong>Fairness</strong><div class="subtitle">' + escapeHtml(fairnessSummary(workerSpread)) + '</div></div></div>' +
         '<div class="spread-list">' + renderSpread(workerSpread, 'worker') + '</div>' +
+      '</div>' +
+      '<div class="panel span-4">' +
+        '<h2>TTL Mix</h2>' +
+        '<div class="subtitle">Published job TTL variants exercised during the run.</div>' +
+        '<div class="metrics">' +
+          metric('With TTL', ttlStats.withTTL) +
+          metric('No TTL', ttlStats.withoutTTL) +
+          metric('Variants', ttlStats.variants.length) +
+        '</div>' +
+        '<div class="spread-list">' + renderTTLSpread(ttlStats.variants) + '</div>' +
       '</div>' +
       '<div class="panel span-12">' +
         '<h2>Timeline</h2>' +
         '<div class="toolbar">' +
-          '<input id="search" type="search" placeholder="Search queue, worker, job, error">' +
+          '<input id="search" type="search" placeholder="Search queue, worker, job, error, ttl">' +
           '<select id="event-type"><option value="">All event types</option>' + Array.from(new Set(events.map(ev => ev.event_type))).sort().map(kind => '<option value="' + escapeHtml(kind) + '">' + escapeHtml(kind) + '</option>').join('') + '</select>' +
         '</div>' +
         '<div class="timeline" id="timeline">' + eventHTML + '</div>' +

@@ -10,6 +10,8 @@ type publishedEntry struct {
 	ID          string
 	Queue       string
 	Marker      string
+	TTLVariant  string
+	TTLSeconds  *int64
 	PublishedAt time.Time
 }
 
@@ -61,10 +63,17 @@ func (l *ledger) pickStaleTokens() []string {
 	return out
 }
 
-func (l *ledger) recordPublish(id, queue, marker string, at time.Time) {
+func (l *ledger) recordPublish(id, queue, marker, ttlVariant string, ttlSeconds *int64, at time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.published[id] = publishedEntry{ID: id, Queue: queue, Marker: marker, PublishedAt: at}
+	l.published[id] = publishedEntry{
+		ID:          id,
+		Queue:       queue,
+		Marker:      marker,
+		TTLVariant:  ttlVariant,
+		TTLSeconds:  ttlSeconds,
+		PublishedAt: at,
+	}
 }
 
 func (l *ledger) recordClaim(jobID, queue, workerID string, attempts int) {

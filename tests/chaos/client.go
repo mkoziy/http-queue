@@ -129,6 +129,11 @@ type PublishJobResp struct {
 	Queue string `json:"queue"`
 }
 
+type publishJobReq struct {
+	Payload any    `json:"payload"`
+	TTL     *int64 `json:"ttl"`
+}
+
 // ClaimResp is the decoded body of GET /queues/{queue}/next.
 type ClaimResp struct {
 	ID       string          `json:"id"`
@@ -183,8 +188,8 @@ func (c *apiClient) DeregisterWorker(ctx context.Context, workerID string) (int,
 }
 
 // PublishJob calls POST /queues/{queue}/jobs with admin Basic Auth.
-func (c *apiClient) PublishJob(ctx context.Context, queue string, payload any) (*PublishJobResp, error) {
-	body, err := json.Marshal(map[string]any{"payload": payload})
+func (c *apiClient) PublishJob(ctx context.Context, queue string, payload any, ttlSeconds *int64) (*PublishJobResp, error) {
+	body, err := json.Marshal(publishJobReq{Payload: payload, TTL: ttlSeconds})
 	if err != nil {
 		return nil, err
 	}
