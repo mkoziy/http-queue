@@ -197,14 +197,14 @@
 - Modify: `sdk/src/index.ts`
 - Create: `sdk/tests/worker-runner.single-target.test.ts`
 
-- [ ] implement runner lifecycle: `start`, `stop`, `pause`, `resume`
-- [ ] load persisted credentials or request them from `CredentialProvider` when absent
-- [ ] persist `nextPollByQueue` and lease state across restarts
-- [ ] prioritize server advisory `X-Next-Poll-Seconds` over local polling heuristics
-- [ ] refresh credentials once on `401`, then retry the failed operation safely
-- [ ] write unit tests for empty queue polling, successful claim/ack flow, and `401` refresh flow
-- [ ] write unit tests for pause/resume and state restoration
-- [ ] run SDK tests before task 7
+- [x] implement runner lifecycle: `start`, `stop`, `pause`, `resume`
+- [x] load persisted credentials or request them from `CredentialProvider` when absent
+- [x] persist `nextPollByQueue` and lease state across restarts
+- [x] prioritize server advisory `X-Next-Poll-Seconds` over local polling heuristics
+- [x] refresh credentials once on `401`, then retry the failed operation safely
+- [x] write unit tests for empty queue polling, successful claim/ack flow, and `401` refresh flow
+- [x] write unit tests for pause/resume and state restoration
+- [x] run SDK tests before task 7
 
 ### Task 7: Add multi-queue scheduling within a target
 

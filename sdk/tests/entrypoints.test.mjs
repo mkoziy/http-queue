@@ -7,7 +7,7 @@ describe("sdk entrypoint", () => {
     expect(SDK_PACKAGE_NAME).toBe("http-queue-sdk");
     expect(SDK_SURFACES.adminClient).toBe("ready");
     expect(SDK_SURFACES.workerClient).toBe("ready");
-    expect(SDK_SURFACES.workerRunner).toBe("pending");
+    expect(SDK_SURFACES.workerRunner).toBe("ready");
     expect(SDK_SURFACES.reactNativeStateStore).toBe("ready");
   });
 });

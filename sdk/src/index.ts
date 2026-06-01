@@ -3,7 +3,7 @@ export const SDK_PACKAGE_NAME = "http-queue-sdk";
 export const SDK_SURFACES = {
   adminClient: "ready",
   workerClient: "ready",
-  workerRunner: "pending",
+  workerRunner: "ready",
   reactNativeStateStore: "ready",
 } as const;
 
@@ -33,12 +33,21 @@ export type {
   WorkerClaimResult,
   WorkerClientOptions,
 } from "./worker/client.js";
+export type {
+  WorkerJobContext,
+  WorkerJobHandler,
+  WorkerRunnerOptions,
+  WorkerRunnerStatus,
+} from "./worker/runner.js";
 export {
   AdminClient,
 } from "./admin/client.js";
 export {
   WorkerClient,
 } from "./worker/client.js";
+export {
+  WorkerRunner,
+} from "./worker/runner.js";
 export {
   MemoryStateStore,
   createMemoryStateStore,
@@ -79,5 +88,3 @@ export {
   parsePersistedTargetState,
   serializePersistedTargetState,
 } from "./worker/state.js";
-
-export interface WorkerRunner {}
