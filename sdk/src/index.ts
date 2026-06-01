@@ -7,31 +7,44 @@ export const SDK_SURFACES = {
   reactNativeStateStore: "pending",
 } as const;
 
-export interface CredentialSet {
-  workerId: string;
-  token: string;
-}
-
-export interface CredentialProviderContext {
-  targetKey: string;
-}
-
-export interface CredentialProvider {
-  getCredentials(context: CredentialProviderContext): Promise<CredentialSet>;
-}
-
-export interface StateStore<TState> {
-  load(key: string): Promise<TState | null>;
-  save(key: string, value: TState): Promise<void>;
-  clear(key: string): Promise<void>;
-}
-
-export interface Logger {
-  debug?(message: string, fields?: Record<string, unknown>): void;
-  info?(message: string, fields?: Record<string, unknown>): void;
-  warn?(message: string, fields?: Record<string, unknown>): void;
-  error?(message: string, fields?: Record<string, unknown>): void;
-}
+export type {
+  CredentialProvider,
+  CredentialProviderContext,
+  CredentialRefreshReason,
+  CredentialSet,
+  FetchLike,
+  PersistedLease,
+  PersistedTargetState,
+  TargetConfig,
+} from "./core/types.js";
+export type { StateStore } from "./core/state-store.js";
+export type { LogEvent, LogHandler, LogLevel, Logger } from "./core/logger.js";
+export type { ErrorContext, HttpQueueSdkErrorCode } from "./core/errors.js";
+export type { RetryDecision, RetryPolicy } from "./core/backoff.js";
+export {
+  createLogger,
+} from "./core/logger.js";
+export {
+  HttpQueueSdkError,
+  createAuthError,
+  createHttpError,
+  createInvalidResponseError,
+  createNetworkError,
+  mapHttpError,
+} from "./core/errors.js";
+export {
+  assertOk,
+  createJsonRequestInit,
+  joinUrl,
+  normalizeFetchError,
+  parseJsonResponse,
+  readText,
+} from "./core/http.js";
+export {
+  calculateBackoffDelay,
+  DEFAULT_RETRY_POLICY,
+  shouldRetryError,
+} from "./core/backoff.js";
 
 export interface AdminClient {}
 

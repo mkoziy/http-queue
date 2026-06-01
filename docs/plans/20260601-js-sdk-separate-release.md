@@ -150,13 +150,13 @@
 - Create: `sdk/src/core/backoff.ts`
 - Create: `sdk/tests/core/*.test.ts`
 
-- [ ] define `FetchLike`, request/response helpers, and normalized SDK error types
-- [ ] define `CredentialProvider`, `StateStore`, logger, target config, and persisted state types
-- [ ] implement structured logger wrapper with no-op default and callback adapter
-- [ ] implement network retry/backoff utilities separate from advisory next-poll scheduling
-- [ ] write unit tests for core error mapping and logger non-fatal behavior
-- [ ] write unit tests for backoff policy behavior
-- [ ] run SDK tests before task 4
+- [x] define `FetchLike`, request/response helpers, and normalized SDK error types
+- [x] define `CredentialProvider`, `StateStore`, logger, target config, and persisted state types
+- [x] implement structured logger wrapper with no-op default and callback adapter
+- [x] implement network retry/backoff utilities separate from advisory next-poll scheduling
+- [x] write unit tests for core error mapping and logger non-fatal behavior
+- [x] write unit tests for backoff policy behavior
+- [x] run SDK tests before task 4
 
 ### Task 4: Implement low-level admin and worker HTTP clients
 
