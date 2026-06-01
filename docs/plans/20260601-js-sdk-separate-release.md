@@ -213,12 +213,12 @@
 - Create: `sdk/src/worker/scheduler.ts`
 - Create: `sdk/tests/worker-runner.multi-queue.test.ts`
 
-- [ ] implement round-robin scheduling across queues within one target
-- [ ] honor `nextPoll` independently per queue instead of globally
-- [ ] ensure a quiet queue does not block polling of active queues
-- [ ] keep the first release single-concurrency per target to avoid lease complexity
-- [ ] write tests for per-queue scheduling, fairness, and advisory header handling
-- [ ] run SDK tests before task 8
+- [x] implement round-robin scheduling across queues within one target
+- [x] honor `nextPoll` independently per queue instead of globally
+- [x] ensure a quiet queue does not block polling of active queues
+- [x] keep the first release single-concurrency per target to avoid lease complexity
+- [x] write tests for per-queue scheduling, fairness, and advisory header handling
+- [x] run SDK tests before task 8
 
 ### Task 8: Add multi-target orchestration
 

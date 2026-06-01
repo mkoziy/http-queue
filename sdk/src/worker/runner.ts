@@ -10,6 +10,7 @@ import type {
 } from "../core/types.js";
 import type { StateStore } from "../core/state-store.js";
 import { WorkerClient, type ClaimedJobResponse } from "./client.js";
+import { RoundRobinQueueScheduler } from "./scheduler.js";
 import { createEmptyPersistedTargetState } from "./state.js";
 
 export type WorkerRunnerStatus = "stopped" | "running" | "paused";
@@ -37,7 +38,6 @@ export interface WorkerRunnerOptions {
 
 export class WorkerRunner {
   private readonly target: TargetConfig;
-  private readonly queue: string;
   private readonly handleJob: WorkerJobHandler;
   private readonly stateStore: StateStore<PersistedTargetState>;
   private readonly retryPolicy: RetryPolicy;
@@ -45,6 +45,7 @@ export class WorkerRunner {
   private readonly sleepImplementation: (delayMs: number) => Promise<void>;
   private readonly logger: Logger;
   private readonly stateKey: string;
+  private readonly scheduler: RoundRobinQueueScheduler;
 
   private state = createEmptyPersistedTargetState();
   private loopPromise: Promise<void> | null = null;
@@ -55,12 +56,11 @@ export class WorkerRunner {
   private status: WorkerRunnerStatus = "stopped";
 
   constructor(options: WorkerRunnerOptions) {
-    if (options.target.queues.length !== 1) {
-      throw new Error("WorkerRunner currently supports exactly one queue per target");
+    if (options.target.queues.length === 0) {
+      throw new Error("WorkerRunner requires at least one queue per target");
     }
 
     this.target = options.target;
-    this.queue = options.target.queues[0]!;
     this.handleJob = options.handleJob;
     this.stateStore = options.stateStore ?? createMemoryStateStore<PersistedTargetState>();
     this.retryPolicy = options.retryPolicy ?? DEFAULT_RETRY_POLICY;
@@ -68,6 +68,7 @@ export class WorkerRunner {
     this.sleepImplementation = options.sleep ?? defaultSleep;
     this.logger = options.logger ?? options.target.logger ?? createLogger();
     this.stateKey = options.target.stateKey ?? options.target.key;
+    this.scheduler = new RoundRobinQueueScheduler(options.target.queues);
   }
 
   getStatus(): WorkerRunnerStatus {
@@ -131,12 +132,19 @@ export class WorkerRunner {
           continue;
         }
 
-        await this.waitUntilDue();
+        const selection = this.scheduler.selectNext(this.now(), this.state.nextPollByQueue);
+
+        if (selection.queue === null) {
+          await this.waitForDelay(selection.waitMs);
+          attempt = 0;
+          continue;
+        }
+
         if (this.stopRequested || this.paused) {
           continue;
         }
 
-        await this.processNextClaim();
+        await this.processNextClaim(selection.queue);
         attempt = 0;
       } catch (error) {
         if (this.stopRequested) {
@@ -149,7 +157,6 @@ export class WorkerRunner {
 
           this.logger.warn("worker runner iteration failed", {
             targetKey: this.target.key,
-            queue: this.queue,
             errorCode: error.code,
             retry: decision.retry,
             delayMs: decision.delayMs,
@@ -162,7 +169,6 @@ export class WorkerRunner {
         } else {
           this.logger.error("worker runner iteration failed with unexpected error", {
             targetKey: this.target.key,
-            queue: this.queue,
           });
         }
 
@@ -171,27 +177,14 @@ export class WorkerRunner {
     }
   }
 
-  private async waitUntilDue() {
-    const nextPollAt = this.state.nextPollByQueue[this.queue];
-
-    if (nextPollAt === undefined) {
-      return;
-    }
-
-    const remaining = nextPollAt - this.now();
-
-    if (remaining > 0) {
-      await this.waitForDelay(remaining);
-    }
-  }
-
-  private async processNextClaim() {
+  private async processNextClaim(queue: string) {
     const claimResult = await this.executeWithRefresh(
-      () => this.createClient().claimNext(this.queue),
+      () => this.createClient().claimNext(queue),
       "claimNext",
+      queue,
     );
 
-    this.state.nextPollByQueue[this.queue] = this.now() + claimResult.nextPollSeconds * 1_000;
+    this.state.nextPollByQueue[queue] = this.now() + claimResult.nextPollSeconds * 1_000;
     await this.saveState();
 
     const job = claimResult.job;
@@ -218,6 +211,7 @@ export class WorkerRunner {
         await this.executeWithRefresh(
           () => this.createClient().nack(job.id),
           "nack",
+          queue,
         );
       } finally {
         await this.clearCurrentLease();
@@ -229,6 +223,7 @@ export class WorkerRunner {
     await this.executeWithRefresh(
       () => this.createClient().ack(job.id),
       "ack",
+      queue,
     );
     await this.clearCurrentLease();
   }
@@ -236,6 +231,7 @@ export class WorkerRunner {
   private async executeWithRefresh<T>(
     operation: () => Promise<T>,
     operationName: string,
+    queue: string,
   ): Promise<T> {
     await this.ensureCredentials("missing");
 
@@ -248,7 +244,7 @@ export class WorkerRunner {
 
       this.logger.info("worker credentials unauthorized, refreshing", {
         targetKey: this.target.key,
-        queue: this.queue,
+        queue,
         operation: operationName,
       });
 
