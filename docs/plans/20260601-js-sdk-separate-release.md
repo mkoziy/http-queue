@@ -258,12 +258,12 @@
 - Create: `sdk/examples/react-native-worker/*`
 - Modify: `sdk/README.md`
 
-- [ ] add a Node/Bun admin usage example
-- [ ] add a worker runner example using a proxy-backed `CredentialProvider`
-- [ ] add a React Native example showing secure storage usage and lifecycle wiring
-- [ ] document logging hooks, credential refresh, multi-target config, and queue scheduling semantics
-- [ ] write doc checks or example smoke tests where practical
-- [ ] run SDK tests/examples checks before task 11
+- [x] add a Node/Bun admin usage example
+- [x] add a worker runner example using a proxy-backed `CredentialProvider`
+- [x] add a React Native example showing secure storage usage and lifecycle wiring
+- [x] document logging hooks, credential refresh, multi-target config, and queue scheduling semantics
+- [x] write doc checks or example smoke tests where practical
+- [x] run SDK tests/examples checks before task 11
 
 ### Task 11: Add standalone SDK release flow
 

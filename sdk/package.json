@@ -41,7 +41,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit",
-    "test": "bun run build && bun test tests/*.test.ts tests/*.test.mjs tests/core/*.test.ts",
+    "examples:check": "tsc -p tsconfig.examples.json --noEmit",
+    "test": "bun run build && bun run examples:check && bun test tests/*.test.ts tests/*.test.mjs tests/core/*.test.ts",
     "test:integration": "bun run build && bun test tests/integration/*.test.ts",
     "codegen": "node ./scripts/generate-types.mjs",
     "codegen:check": "node ./scripts/generate-types.mjs --check"
