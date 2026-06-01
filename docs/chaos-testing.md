@@ -65,7 +65,7 @@ Each run:
 1. Builds the real `http-queue` binary into a temporary directory.
 2. Starts it with isolated admin credentials and isolated BadgerDB state.
 3. Waits for readiness using the real HTTP surface.
-4. Runs concurrent publisher goroutines with randomized queue and marker selection.
+4. Runs concurrent publisher goroutines with randomized queue, marker, and TTL variant selection.
 5. Runs concurrent worker goroutines that claim jobs and perform randomized actions.
 6. Runs a controller goroutine that injects higher-level chaos events.
 7. Stops the server cleanly after the duration.
@@ -85,6 +85,20 @@ The chaos runner intentionally injects these behaviors:
 - `burst_publish`: publish a burst of extra jobs
 - `stale_token_probe`: attempt claim, ack, and nack using a stale worker token
 - `server_restarted`: restart the real server process mid-run
+
+Publishers and burst-publish events now mix multiple TTL variants:
+
+- `none`: no job TTL
+- `short`: very short TTL intended to expire while the run is active
+- `medium`: TTL longer than the visibility timeout
+- `long`: TTL long enough to survive most normal processing paths
+
+This exercises:
+
+- expired pending-job deletion
+- expired reserved-job deletion on `nack`
+- expired reserved-job deletion on reservation-timeout sweep
+- non-expiring jobs and longer-lived TTL jobs in the same run
 
 These are scenario injections, not automatically defects.
 
@@ -174,7 +188,7 @@ The audit is the main correctness gate. The run fails when invariant violations 
 
 Examples of what the audit validates:
 
-- published jobs are either ACKed or still present in DB
+- published jobs are either ACKed, still present in DB, or legitimately gone because their TTL elapsed
 - queue indexes point to real job records
 - queue indexes match job status
 - a job does not exist in multiple queue indexes at once

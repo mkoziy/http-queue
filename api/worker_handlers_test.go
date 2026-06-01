@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---- HandleClaimNextJob Tests ----
@@ -297,6 +298,49 @@ func TestHandleAckJob_Success(t *testing.T) {
 	}
 }
 
+func TestHandleAckJob_AfterTTLExpiryStillSucceeds(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	_, workerToken := registerTestWorker(t, database)
+
+	jobBody := `{"payload":{"hello":"world"},"ttl":1}`
+	jobReq := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(jobBody))
+	jobReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	jobRec := httptest.NewRecorder()
+	router.ServeHTTP(jobRec, jobReq)
+	if jobRec.Code != http.StatusCreated {
+		t.Fatalf("schedule job: status = %d, want %d", jobRec.Code, http.StatusCreated)
+	}
+	var jobResp map[string]interface{}
+	if err := json.NewDecoder(jobRec.Body).Decode(&jobResp); err != nil {
+		t.Fatalf("decode job response: %v", err)
+	}
+	jobID := jobResp["id"].(string)
+
+	claimReq := httptest.NewRequest(http.MethodGet, "/queues/testqueue/next", nil)
+	claimReq.Header.Set("Authorization", "Bearer "+workerToken)
+	claimRec := httptest.NewRecorder()
+	router.ServeHTTP(claimRec, claimReq)
+	if claimRec.Code != http.StatusOK {
+		t.Fatalf("claim job: status = %d, want %d", claimRec.Code, http.StatusOK)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	ackReq := httptest.NewRequest(http.MethodPost, "/jobs/"+jobID+"/ack", nil)
+	ackReq.Header.Set("Authorization", "Bearer "+workerToken)
+	ackRec := httptest.NewRecorder()
+	router.ServeHTTP(ackRec, ackReq)
+
+	if ackRec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d; body = %q", ackRec.Code, http.StatusNoContent, ackRec.Body.String())
+	}
+}
+
 func TestHandleAckJob_DoubleAck(t *testing.T) {
 	database, cleanup := openTestDB(t)
 	defer cleanup()
@@ -556,6 +600,58 @@ func TestHandleNackJob_RequeuesJob(t *testing.T) {
 		if attempts != 2 {
 			t.Errorf("attempts = %d, want 2", attempts)
 		}
+	}
+}
+
+func TestHandleNackJob_AfterTTLExpiryDeletesJob(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	_, workerToken := registerTestWorker(t, database)
+
+	jobBody := `{"payload":{"hello":"world"},"ttl":1}`
+	jobReq := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(jobBody))
+	jobReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	jobRec := httptest.NewRecorder()
+	router.ServeHTTP(jobRec, jobReq)
+	if jobRec.Code != http.StatusCreated {
+		t.Fatalf("schedule job: status = %d, want %d", jobRec.Code, http.StatusCreated)
+	}
+	var jobResp map[string]interface{}
+	if err := json.NewDecoder(jobRec.Body).Decode(&jobResp); err != nil {
+		t.Fatalf("decode job response: %v", err)
+	}
+	jobID := jobResp["id"].(string)
+
+	claimReq := httptest.NewRequest(http.MethodGet, "/queues/testqueue/next", nil)
+	claimReq.Header.Set("Authorization", "Bearer "+workerToken)
+	claimRec := httptest.NewRecorder()
+	router.ServeHTTP(claimRec, claimReq)
+	if claimRec.Code != http.StatusOK {
+		t.Fatalf("claim job: status = %d, want %d", claimRec.Code, http.StatusOK)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	nackReq := httptest.NewRequest(http.MethodPost, "/jobs/"+jobID+"/nack", nil)
+	nackReq.Header.Set("Authorization", "Bearer "+workerToken)
+	nackRec := httptest.NewRecorder()
+	router.ServeHTTP(nackRec, nackReq)
+
+	if nackRec.Code != http.StatusNoContent {
+		t.Fatalf("nack: status = %d, want %d; body = %q", nackRec.Code, http.StatusNoContent, nackRec.Body.String())
+	}
+
+	claimReq2 := httptest.NewRequest(http.MethodGet, "/queues/testqueue/next", nil)
+	claimReq2.Header.Set("Authorization", "Bearer "+workerToken)
+	claimRec2 := httptest.NewRecorder()
+	router.ServeHTTP(claimRec2, claimReq2)
+
+	if claimRec2.Code != http.StatusNoContent {
+		t.Errorf("re-claim after expired nack: status = %d, want %d; body = %q", claimRec2.Code, http.StatusNoContent, claimRec2.Body.String())
 	}
 }
 

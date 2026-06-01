@@ -181,6 +181,8 @@ func checkInvariants(state *dbState, led *ledger, violations *[]violation, log *
 	}
 	led.mu.Unlock()
 
+	auditNow := time.Now().UTC()
+
 	// Build a set of all job IDs that appear in any queue index.
 	indexedJobs := make(map[string][]string) // jobID → list of index keys
 
@@ -195,11 +197,14 @@ func checkInvariants(state *dbState, led *ledger, violations *[]violation, log *
 	}
 
 	// Invariant 1: Every published job is either ACKed or present in DB.
-	for jobID := range published {
+	for jobID, pub := range published {
 		if _, acked := acks[jobID]; acked {
 			continue
 		}
 		if _, inDB := state.jobs[jobID]; inDB {
+			continue
+		}
+		if publishTTLExpired(pub, auditNow) {
 			continue
 		}
 		add(violations, "published job missing from DB and not ACKed", jobID, "")
@@ -278,6 +283,14 @@ func checkInvariants(state *dbState, led *ledger, violations *[]violation, log *
 		"acked", len(acks),
 		"violations", len(*violations),
 	)
+}
+
+func publishTTLExpired(pub publishedEntry, now time.Time) bool {
+	if pub.TTLSeconds == nil {
+		return false
+	}
+	expiry := pub.EnqueuedAt.Add(time.Duration(*pub.TTLSeconds) * time.Second)
+	return !now.Before(expiry)
 }
 
 func add(violations *[]violation, rule, jobID, indexKey string) {

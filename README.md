@@ -51,6 +51,7 @@ Workers claim jobs by polling the API. The first worker to claim a pending job w
 
 - **Claim-based pull**: no shared consumer cursor; the first successful claimant gets the job.
 - **Visibility timeout**: reserved jobs return to the queue if they are not acked in time.
+- **Per-job TTL**: jobs can expire individually via the optional `ttl` field at schedule time.
 - **Dead-letter queue**: jobs move to dead-letter after `MAX_ATTEMPTS`.
 - **Worker expiry**: inactive workers are removed automatically and their jobs are re-queued.
 - **Debounced `LastSeen` writes**: hot-path polling avoids excessive BadgerDB churn.
@@ -110,7 +111,19 @@ Schedule a job:
 ```bash
 curl -u admin:secret -X POST http://localhost:8080/queues/orders/jobs \
   -H "Content-Type: application/json" \
-  -d '{"payload": {"orderId": 42, "action": "process"}}'
+  -d '{"payload": {"orderId": 42, "action": "process"}, "ttl": 600}'
+```
+
+Example response:
+
+```json
+{
+  "id": "01JXXXXXXX...",
+  "queue": "orders",
+  "status": "pending",
+  "created": "2026-05-23T00:00:00Z",
+  "ttl": 600
+}
 ```
 
 Claim the job:
@@ -138,13 +151,15 @@ If the queue is empty, `GET /queues/{queue}/next` returns `204 No Content`. If a
 
 ## API
 
+OpenAPI spec: [openapi.yaml](./openapi.yaml)
+
 ### Admin endpoints
 
 Uses HTTP Basic Auth with `ADMIN_USER` and `ADMIN_PASS`.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/queues/{queue}/jobs` | Schedule a new job |
+| `POST` | `/queues/{queue}/jobs` | Schedule a new job with optional `ttl` seconds |
 | `POST` | `/workers` | Register a new worker and return its bearer token |
 | `DELETE` | `/workers/{id}` | Deregister a worker and re-queue any reserved jobs |
 
@@ -165,6 +180,25 @@ Uses a bearer token returned at worker registration time.
 3. Process the payload
 4. `POST /jobs/{id}/ack` on success
 5. `POST /jobs/{id}/nack` on failure
+
+### Job TTL semantics
+
+`POST /queues/{queue}/jobs` accepts an optional `ttl` field:
+
+```json
+{
+  "payload": {"orderId": 42},
+  "ttl": 600
+}
+```
+
+- `ttl` may be omitted or set to `null` for no expiry
+- `ttl` must be a positive integer number of seconds when provided
+- expired `pending` jobs are deleted and never returned by `GET /queues/{queue}/next`
+- if a job was already claimed, `POST /jobs/{id}/ack` still succeeds even if wall-clock TTL has elapsed
+- if a claimed job has expired, `POST /jobs/{id}/nack` deletes it instead of re-queueing it
+- if a claimed job hits visibility timeout after its TTL elapsed, the sweeper deletes it instead of re-queueing it
+- jobs already moved to dead-letter remain stored even if their TTL is in the past
 
 ## Configuration
 
@@ -307,7 +341,7 @@ This target pushes images for `linux/amd64` and `linux/arm64` by default, so aut
 State is stored in BadgerDB with a compact key layout:
 
 ```text
-job:{ulid}                        -> JSON: {queue, payload, status, workerID, createdAt, attempts}
+job:{ulid}                        -> JSON: {queue, payload, status, workerID, createdAt, expiresAt, attempts}
 queue:{queue}:pending:{ulid}      -> "" (index only)
 queue:{queue}:reserved:{ulid}     -> expiry-unix-timestamp
 queue:{queue}:dead:{ulid}         -> "" (dead-letter index)

@@ -43,6 +43,9 @@ func TestScheduleJob(t *testing.T) {
 	if job.WorkerID != "" {
 		t.Errorf("job.WorkerID = %q, want empty", job.WorkerID)
 	}
+	if job.ExpiresAt != nil {
+		t.Errorf("job.ExpiresAt = %v, want nil", job.ExpiresAt)
+	}
 
 	// Verify the payload was preserved.
 	var payload map[string]string
@@ -79,6 +82,51 @@ func TestScheduleJob(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("pending index not found: %v", err)
+	}
+}
+
+func TestScheduleJobWithExpiry(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	expiresAt := time.Now().UTC().Add(10 * time.Minute).Round(0)
+	job, err := ScheduleJobWithExpiry(database, "testqueue", json.RawMessage(`{"hello":"world"}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry() error: %v", err)
+	}
+
+	if job.ExpiresAt == nil {
+		t.Fatal("job.ExpiresAt = nil, want value")
+	}
+	if !job.ExpiresAt.Equal(expiresAt) {
+		t.Fatalf("job.ExpiresAt = %v, want %v", job.ExpiresAt, expiresAt)
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(job.ID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+
+		var stored Job
+		if err := json.Unmarshal(data, &stored); err != nil {
+			return err
+		}
+		if stored.ExpiresAt == nil {
+			t.Error("stored.ExpiresAt = nil, want value")
+			return nil
+		}
+		if !stored.ExpiresAt.Equal(expiresAt) {
+			t.Errorf("stored.ExpiresAt = %v, want %v", stored.ExpiresAt, expiresAt)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("read stored job: %v", err)
 	}
 }
 
@@ -257,6 +305,49 @@ func TestClaimNextJob_EmptyQueue(t *testing.T) {
 	}
 	if claimed != nil {
 		t.Fatalf("ClaimNextJob() on empty queue returned %+v, want nil", claimed)
+	}
+}
+
+func TestClaimNextJob_DeletesExpiredPendingAndClaimsNextLiveJob(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	expiredAt := time.Now().UTC().Add(-1 * time.Minute)
+	expiredJob, err := ScheduleJobWithExpiry(database, "testqueue", json.RawMessage(`{"expired":true}`), &expiredAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(expired): %v", err)
+	}
+
+	liveJob, err := ScheduleJob(database, "testqueue", json.RawMessage(`{"live":true}`))
+	if err != nil {
+		t.Fatalf("ScheduleJob(live): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "testqueue", "worker-1", 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob() returned nil")
+	}
+	if claimed.ID != liveJob.ID {
+		t.Fatalf("claimed.ID = %q, want %q", claimed.ID, liveJob.ID)
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.JobKey(expiredJob.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired job record still exists after claim cleanup")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.PendingIndexKey("testqueue", expiredJob.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired pending index still exists after claim cleanup")
 	}
 }
 
@@ -463,6 +554,56 @@ func TestAckJob_Twice(t *testing.T) {
 	err = AckJob(database, claimed.ID, "worker-1")
 	if err == nil {
 		t.Fatal("Second AckJob: expected error, got nil")
+	}
+}
+
+func TestAckJob_AfterTTLExpiryStillSucceeds(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	expiresAt := time.Now().UTC().Add(5 * time.Second)
+	_, err := ScheduleJobWithExpiry(database, "testqueue", json.RawMessage(`{}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "testqueue", "worker-1", 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob() returned nil")
+	}
+
+	past := time.Now().UTC().Add(-1 * time.Minute)
+	err = database.Update(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(claimed.ID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+
+		var job Job
+		if err := json.Unmarshal(data, &job); err != nil {
+			return err
+		}
+		job.ExpiresAt = &past
+
+		updated, err := json.Marshal(job)
+		if err != nil {
+			return err
+		}
+		return txn.Set(db.JobKey(claimed.ID), updated)
+	})
+	if err != nil {
+		t.Fatalf("set expired job: %v", err)
+	}
+
+	if err := AckJob(database, claimed.ID, "worker-1"); err != nil {
+		t.Fatalf("AckJob() after ttl expiry: %v", err)
 	}
 }
 
@@ -725,6 +866,73 @@ func TestNackJob_MaxAttemptsOne(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("reading job: %v", err)
+	}
+}
+
+func TestNackJob_ExpiredReservedDeletesJob(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	expiresAt := time.Now().UTC().Add(5 * time.Second)
+	_, err := ScheduleJobWithExpiry(database, "testqueue", json.RawMessage(`{}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "testqueue", "worker-1", 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob() returned nil")
+	}
+
+	past := time.Now().UTC().Add(-1 * time.Minute)
+	err = database.Update(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(claimed.ID))
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+
+		var job Job
+		if err := json.Unmarshal(data, &job); err != nil {
+			return err
+		}
+		job.ExpiresAt = &past
+
+		updated, err := json.Marshal(job)
+		if err != nil {
+			return err
+		}
+		return txn.Set(db.JobKey(claimed.ID), updated)
+	})
+	if err != nil {
+		t.Fatalf("set expired job: %v", err)
+	}
+
+	if err := NackJob(database, claimed.ID, "worker-1", cfg.MaxAttempts); err != nil {
+		t.Fatalf("NackJob(): %v", err)
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.JobKey(claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired nacked job still exists")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.ReservedIndexKey("testqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired nacked reserved index still exists")
 	}
 }
 
