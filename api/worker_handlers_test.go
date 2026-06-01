@@ -57,6 +57,9 @@ func TestHandleClaimNextJob_Success(t *testing.T) {
 	if claimRec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d; body = %q", claimRec.Code, http.StatusOK, claimRec.Body.String())
 	}
+	if got := claimRec.Header().Get(headerNextPollSeconds); got != "5" {
+		t.Errorf("%s = %q, want %q", headerNextPollSeconds, got, "5")
+	}
 
 	var claimResp map[string]interface{}
 	if err := json.NewDecoder(claimRec.Body).Decode(&claimResp); err != nil {
@@ -106,6 +109,52 @@ func TestHandleClaimNextJob_EmptyQueue(t *testing.T) {
 
 	if claimRec.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want %d; body = %q", claimRec.Code, http.StatusNoContent, claimRec.Body.String())
+	}
+	if got := claimRec.Header().Get(headerNextPollSeconds); got != "5" {
+		t.Errorf("%s = %q, want %q", headerNextPollSeconds, got, "5")
+	}
+}
+
+func TestHandleClaimNextJob_NextPollHeaderReflectsActiveWorkers(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	registerWorker := func() string {
+		t.Helper()
+
+		regReq := httptest.NewRequest(http.MethodPost, "/workers", nil)
+		regReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+		regRec := httptest.NewRecorder()
+		router.ServeHTTP(regRec, regReq)
+		if regRec.Code != http.StatusCreated {
+			t.Fatalf("register worker: status = %d, want %d", regRec.Code, http.StatusCreated)
+		}
+
+		var regResp map[string]string
+		if err := json.NewDecoder(regRec.Body).Decode(&regResp); err != nil {
+			t.Fatalf("decode register response: %v", err)
+		}
+		return regResp["token"]
+	}
+
+	tokens := []string{registerWorker(), registerWorker(), registerWorker()}
+	wantHeaders := []string{"5", "8", "9"}
+
+	for i, token := range tokens {
+		claimReq := httptest.NewRequest(http.MethodGet, "/queues/scaled/next", nil)
+		claimReq.Header.Set("Authorization", "Bearer "+token)
+		claimRec := httptest.NewRecorder()
+		router.ServeHTTP(claimRec, claimReq)
+
+		if claimRec.Code != http.StatusNoContent {
+			t.Fatalf("claim %d status = %d, want %d", i+1, claimRec.Code, http.StatusNoContent)
+		}
+		if got := claimRec.Header().Get(headerNextPollSeconds); got != wantHeaders[i] {
+			t.Fatalf("claim %d %s = %q, want %q", i+1, headerNextPollSeconds, got, wantHeaders[i])
+		}
 	}
 }
 

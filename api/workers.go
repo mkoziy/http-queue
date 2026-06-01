@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	badger "github.com/dgraph-io/badger/v4"
 
@@ -10,15 +11,22 @@ import (
 	"github.com/mkoziy/http-queue/queue"
 )
 
+const headerNextPollSeconds = "X-Next-Poll-Seconds"
+
 // WorkersHandler handles admin worker endpoints.
 type WorkersHandler struct {
-	db  *badger.DB
-	cfg *config.Config
+	db              *badger.DB
+	cfg             *config.Config
+	nextPollAdvisor *queue.NextPollAdvisor
 }
 
 // NewWorkersHandler creates a new WorkersHandler.
 func NewWorkersHandler(database *badger.DB, cfg *config.Config) *WorkersHandler {
-	return &WorkersHandler{db: database, cfg: cfg}
+	return &WorkersHandler{
+		db:              database,
+		cfg:             cfg,
+		nextPollAdvisor: queue.NewNextPollAdvisor(cfg),
+	}
 }
 
 // HandleRegisterWorker handles POST /workers
@@ -64,6 +72,17 @@ func (h *WorkersHandler) HandleClaimNextJob(w http.ResponseWriter, r *http.Reque
 		respondError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+
+	nextPollSeconds, err := h.nextPollAdvisor.NextPollSeconds(queueName, worker.ID)
+	if err != nil {
+		if errors.Is(err, queue.ErrInvalidQueueName) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set(headerNextPollSeconds, strconv.Itoa(nextPollSeconds))
 
 	job, err := queue.ClaimNextJob(h.db, queueName, worker.ID, h.cfg.VisibilityTimeout)
 	if err != nil {

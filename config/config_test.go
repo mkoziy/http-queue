@@ -15,6 +15,8 @@ func clearEnv(t *testing.T) func() {
 		"PORT", "ADMIN_USER", "ADMIN_PASS", "BADGER_PATH",
 		"VISIBILITY_TIMEOUT", "WORKER_EXPIRY", "SWEEP_INTERVAL",
 		"MAX_ATTEMPTS", "LAST_SEEN_DEBOUNCE",
+		"WORKER_NEXT_BASE_INTERVAL", "WORKER_NEXT_MIN_INTERVAL",
+		"WORKER_NEXT_MAX_INTERVAL", "WORKER_NEXT_ACTIVITY_WINDOW",
 	}
 
 	saved := make(map[string]string, len(keys))
@@ -82,6 +84,18 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.LastSeenDebounce != 30*time.Second {
 		t.Errorf("LastSeenDebounce = %v, want %v", cfg.LastSeenDebounce, 30*time.Second)
 	}
+	if cfg.WorkerNextBaseInterval != 5*time.Second {
+		t.Errorf("WorkerNextBaseInterval = %v, want %v", cfg.WorkerNextBaseInterval, 5*time.Second)
+	}
+	if cfg.WorkerNextMinInterval != 1*time.Second {
+		t.Errorf("WorkerNextMinInterval = %v, want %v", cfg.WorkerNextMinInterval, 1*time.Second)
+	}
+	if cfg.WorkerNextMaxInterval != 1*time.Minute {
+		t.Errorf("WorkerNextMaxInterval = %v, want %v", cfg.WorkerNextMaxInterval, time.Minute)
+	}
+	if cfg.WorkerNextActivityWindow != 1*time.Minute {
+		t.Errorf("WorkerNextActivityWindow = %v, want %v", cfg.WorkerNextActivityWindow, time.Minute)
+	}
 }
 
 func TestLoad_AllVarsSet(t *testing.T) {
@@ -96,6 +110,10 @@ func TestLoad_AllVarsSet(t *testing.T) {
 	setenv(t, "SWEEP_INTERVAL", "15s")
 	setenv(t, "MAX_ATTEMPTS", "5")
 	setenv(t, "LAST_SEEN_DEBOUNCE", "1m")
+	setenv(t, "WORKER_NEXT_BASE_INTERVAL", "5m")
+	setenv(t, "WORKER_NEXT_MIN_INTERVAL", "5s")
+	setenv(t, "WORKER_NEXT_MAX_INTERVAL", "30m")
+	setenv(t, "WORKER_NEXT_ACTIVITY_WINDOW", "45m")
 
 	cfg, err := Load()
 	if err != nil {
@@ -128,6 +146,18 @@ func TestLoad_AllVarsSet(t *testing.T) {
 	}
 	if cfg.LastSeenDebounce != 1*time.Minute {
 		t.Errorf("LastSeenDebounce = %v, want %v", cfg.LastSeenDebounce, 1*time.Minute)
+	}
+	if cfg.WorkerNextBaseInterval != 5*time.Minute {
+		t.Errorf("WorkerNextBaseInterval = %v, want %v", cfg.WorkerNextBaseInterval, 5*time.Minute)
+	}
+	if cfg.WorkerNextMinInterval != 5*time.Second {
+		t.Errorf("WorkerNextMinInterval = %v, want %v", cfg.WorkerNextMinInterval, 5*time.Second)
+	}
+	if cfg.WorkerNextMaxInterval != 30*time.Minute {
+		t.Errorf("WorkerNextMaxInterval = %v, want %v", cfg.WorkerNextMaxInterval, 30*time.Minute)
+	}
+	if cfg.WorkerNextActivityWindow != 45*time.Minute {
+		t.Errorf("WorkerNextActivityWindow = %v, want %v", cfg.WorkerNextActivityWindow, 45*time.Minute)
 	}
 }
 
@@ -277,7 +307,7 @@ func TestLoad_EmptyOptionalEnvVarsUseDefaults(t *testing.T) {
 
 	setenv(t, "ADMIN_USER", "admin")
 	setenv(t, "ADMIN_PASS", "secret")
-	setenv(t, "PORT", "")       // empty string
+	setenv(t, "PORT", "")        // empty string
 	setenv(t, "BADGER_PATH", "") // empty string
 
 	cfg, err := Load()
@@ -347,6 +377,71 @@ func TestLoad_InvalidSweepInterval_Negative(t *testing.T) {
 	}
 	if !errors.Is(err, ErrInvalidSweepInterval) {
 		t.Errorf("Load() error = %v, want ErrInvalidSweepInterval", err)
+	}
+}
+
+func TestLoad_InvalidWorkerNextIntervals(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		val  string
+		want error
+	}{
+		{name: "base", key: "WORKER_NEXT_BASE_INTERVAL", val: "0s", want: ErrInvalidWorkerNextBaseInterval},
+		{name: "min", key: "WORKER_NEXT_MIN_INTERVAL", val: "0s", want: ErrInvalidWorkerNextMinInterval},
+		{name: "max", key: "WORKER_NEXT_MAX_INTERVAL", val: "0s", want: ErrInvalidWorkerNextMaxInterval},
+		{name: "window", key: "WORKER_NEXT_ACTIVITY_WINDOW", val: "0s", want: ErrInvalidWorkerNextActivityWindow},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer clearEnv(t)()
+			setenv(t, "ADMIN_USER", "admin")
+			setenv(t, "ADMIN_PASS", "secret")
+			setenv(t, tc.key, tc.val)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatal("Load() expected error, got nil")
+			}
+			if !errors.Is(err, tc.want) {
+				t.Errorf("Load() error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_InvalidWorkerNextRange(t *testing.T) {
+	defer clearEnv(t)()
+
+	setenv(t, "ADMIN_USER", "admin")
+	setenv(t, "ADMIN_PASS", "secret")
+	setenv(t, "WORKER_NEXT_MIN_INTERVAL", "2m")
+	setenv(t, "WORKER_NEXT_MAX_INTERVAL", "1m")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error, got nil")
+	}
+	if !errors.Is(err, ErrInvalidWorkerNextIntervalRange) {
+		t.Errorf("Load() error = %v, want %v", err, ErrInvalidWorkerNextIntervalRange)
+	}
+}
+
+func TestLoad_InvalidWorkerNextActivityCoverage(t *testing.T) {
+	defer clearEnv(t)()
+
+	setenv(t, "ADMIN_USER", "admin")
+	setenv(t, "ADMIN_PASS", "secret")
+	setenv(t, "WORKER_NEXT_MAX_INTERVAL", "10m")
+	setenv(t, "WORKER_NEXT_ACTIVITY_WINDOW", "5m")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() expected error, got nil")
+	}
+	if !errors.Is(err, ErrInvalidWorkerNextActivityCoverage) {
+		t.Errorf("Load() error = %v, want %v", err, ErrInvalidWorkerNextActivityCoverage)
 	}
 }
 

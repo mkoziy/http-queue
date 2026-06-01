@@ -147,7 +147,7 @@ curl -H "Authorization: Bearer YOUR_WORKER_TOKEN" \
   -X POST http://localhost:8080/jobs/01JXXXXXXX.../nack
 ```
 
-If the queue is empty, `GET /queues/{queue}/next` returns `204 No Content`. If a job reaches `MAX_ATTEMPTS`, `nack` moves it to dead-letter instead of re-queueing it.
+`GET /queues/{queue}/next` always returns an advisory `X-Next-Poll-Seconds` header telling the worker how many whole seconds to wait before polling that queue again. If the queue is empty, the endpoint returns `204 No Content`. If a job reaches `MAX_ATTEMPTS`, `nack` moves it to dead-letter instead of re-queueing it.
 
 ## API
 
@@ -169,7 +169,7 @@ Uses a bearer token returned at worker registration time.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/queues/{queue}/next` | Claim the next pending job |
+| `GET` | `/queues/{queue}/next` | Claim the next pending job and return `X-Next-Poll-Seconds` |
 | `POST` | `/jobs/{id}/ack` | Mark a job complete |
 | `POST` | `/jobs/{id}/nack` | Re-queue the job or move it to dead-letter |
 
@@ -177,9 +177,20 @@ Uses a bearer token returned at worker registration time.
 
 1. `POST /workers`
 2. `GET /queues/{queue}/next`
+   Read `X-Next-Poll-Seconds` and sleep that many seconds before the next poll for the same queue.
 3. Process the payload
 4. `POST /jobs/{id}/ack` on success
 5. `POST /jobs/{id}/nack` on failure
+
+### Next Poll Header
+
+`GET /queues/{queue}/next` returns `X-Next-Poll-Seconds` on both `200 OK` and `204 No Content`.
+
+- the header is advisory; existing workers remain compatible if they ignore it
+- the value is a whole number of seconds
+- active workers are counted per queue within `WORKER_NEXT_ACTIVITY_WINDOW`
+- the server computes the hint as `ceil(base_interval * sqrt(active_workers))`, clamped between `WORKER_NEXT_MIN_INTERVAL` and `WORKER_NEXT_MAX_INTERVAL`
+- the activity tracker is in memory, so it resets on process restart and warms back up from subsequent worker polls
 
 ### Job TTL semantics
 
@@ -213,6 +224,27 @@ Uses a bearer token returned at worker registration time.
 | `SWEEP_INTERVAL` | `30s` | Sweep cadence for expiry and reconciliation |
 | `MAX_ATTEMPTS` | `3` | Dead-letter threshold |
 | `LAST_SEEN_DEBOUNCE` | `30s` | Minimum interval between persisted `LastSeen` updates |
+| `WORKER_NEXT_BASE_INTERVAL` | `5s` | Base advisory poll interval for one active worker on a queue |
+| `WORKER_NEXT_MIN_INTERVAL` | `1s` | Lower clamp for `X-Next-Poll-Seconds` |
+| `WORKER_NEXT_MAX_INTERVAL` | `1m` | Upper clamp for `X-Next-Poll-Seconds` |
+| `WORKER_NEXT_ACTIVITY_WINDOW` | `1m` | How long a worker stays counted as active for a queue; must be at least `WORKER_NEXT_MAX_INTERVAL` |
+
+To target about one poll every 5 minutes when only one worker is active on a queue:
+
+```bash
+WORKER_NEXT_BASE_INTERVAL=5m
+WORKER_NEXT_MIN_INTERVAL=5m
+WORKER_NEXT_MAX_INTERVAL=30m
+WORKER_NEXT_ACTIVITY_WINDOW=30m
+```
+
+With that setup the server will usually advise:
+
+- 1 active worker on a queue: `300`
+- 2 active workers on a queue: `425`
+- 4 active workers on a queue: `600`
+
+If you increase `WORKER_NEXT_MAX_INTERVAL`, increase `WORKER_NEXT_ACTIVITY_WINDOW` too so workers do not fall out of the active set before their next scheduled poll.
 
 ## Development
 

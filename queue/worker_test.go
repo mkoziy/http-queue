@@ -17,13 +17,17 @@ import (
 // testConfig returns a minimal config.Config with test-appropriate values.
 func testConfig() *config.Config {
 	return &config.Config{
-		AdminUser:         "testadmin",
-		AdminPass:         "testpass",
-		VisibilityTimeout: 30 * time.Second,
-		MaxAttempts:       3,
-		LastSeenDebounce:  100 * time.Millisecond,
-		SweepInterval:     10 * time.Minute, // don't trigger sweeps during tests
-		WorkerExpiry:      10 * time.Minute,
+		AdminUser:                "testadmin",
+		AdminPass:                "testpass",
+		VisibilityTimeout:        30 * time.Second,
+		MaxAttempts:              3,
+		LastSeenDebounce:         100 * time.Millisecond,
+		SweepInterval:            10 * time.Minute, // don't trigger sweeps during tests
+		WorkerExpiry:             10 * time.Minute,
+		WorkerNextBaseInterval:   5 * time.Second,
+		WorkerNextMinInterval:    1 * time.Second,
+		WorkerNextMaxInterval:    1 * time.Minute,
+		WorkerNextActivityWindow: 1 * time.Minute,
 	}
 }
 

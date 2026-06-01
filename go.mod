@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/dgraph-io/badger/v4 v4.9.1
+	github.com/go-pkgz/expirable-cache/v3 v3.1.0
 	github.com/oklog/ulid/v2 v2.1.1
 )
 
