@@ -4,7 +4,7 @@ export const SDK_SURFACES = {
   adminClient: "ready",
   workerClient: "ready",
   workerRunner: "pending",
-  reactNativeStateStore: "pending",
+  reactNativeStateStore: "ready",
 } as const;
 
 export type {
@@ -21,6 +21,7 @@ export type { StateStore } from "./core/state-store.js";
 export type { LogEvent, LogHandler, LogLevel, Logger } from "./core/logger.js";
 export type { ErrorContext, HttpQueueSdkErrorCode } from "./core/errors.js";
 export type { RetryDecision, RetryPolicy } from "./core/backoff.js";
+export type { SecureStorageAdapter, SecureStateStoreOptions } from "./react-native/secure-state-store.js";
 export type {
   AdminClientOptions,
   RegisterWorkerResponse,
@@ -38,6 +39,10 @@ export {
 export {
   WorkerClient,
 } from "./worker/client.js";
+export {
+  MemoryStateStore,
+  createMemoryStateStore,
+} from "./core/memory-state-store.js";
 export {
   createLogger,
 } from "./core/logger.js";
@@ -62,5 +67,17 @@ export {
   DEFAULT_RETRY_POLICY,
   shouldRetryError,
 } from "./core/backoff.js";
+export {
+  createPersistedTargetStateSecureStore,
+  createSecureStateStore,
+} from "./react-native/secure-state-store.js";
+export {
+  PERSISTED_TARGET_STATE_VERSION,
+  PersistedStateError,
+  PersistedStateVersionMismatchError,
+  createEmptyPersistedTargetState,
+  parsePersistedTargetState,
+  serializePersistedTargetState,
+} from "./worker/state.js";
 
 export interface WorkerRunner {}

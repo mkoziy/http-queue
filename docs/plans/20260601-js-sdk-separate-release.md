@@ -183,12 +183,12 @@
 - Create: `sdk/tests/state-store.test.ts`
 - Create: `sdk/tests/react-native-state-store.test.ts`
 
-- [ ] define versioned persisted target state with credentials, `nextPollByQueue`, and `currentLease`
-- [ ] implement in-memory store for tests and server-side short-lived use
-- [ ] implement React Native secure storage adapter contract for Android-safe token persistence
-- [ ] decide whether all state lives in secure storage for v1 and document that choice
-- [ ] write tests for serialization, missing state, corrupted state, and version mismatch handling
-- [ ] run SDK tests before task 6
+- [x] define versioned persisted target state with credentials, `nextPollByQueue`, and `currentLease`
+- [x] implement in-memory store for tests and server-side short-lived use
+- [x] implement React Native secure storage adapter contract for Android-safe token persistence
+- [x] decide whether all state lives in secure storage for v1 and document that choice
+- [x] write tests for serialization, missing state, corrupted state, and version mismatch handling
+- [x] run SDK tests before task 6
 
 ### Task 6: Implement single-target worker runner
 

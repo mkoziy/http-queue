@@ -8,5 +8,6 @@ describe("sdk entrypoint", () => {
     expect(SDK_SURFACES.adminClient).toBe("ready");
     expect(SDK_SURFACES.workerClient).toBe("ready");
     expect(SDK_SURFACES.workerRunner).toBe("pending");
+    expect(SDK_SURFACES.reactNativeStateStore).toBe("ready");
   });
 });
