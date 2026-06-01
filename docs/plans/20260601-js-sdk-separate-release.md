@@ -133,11 +133,11 @@
 - Modify: `sdk/package.json`
 - Modify: `sdk/README.md`
 
-- [ ] add OpenAPI type generation using root `openapi.yaml` as the source
-- [ ] generate stable TypeScript types into `sdk/src/generated/`
-- [ ] document how and when generated files are refreshed
-- [ ] write tests or checks to catch drift between generated output and committed SDK source expectations
-- [ ] run codegen and SDK tests before task 3
+- [x] add OpenAPI type generation using root `openapi.yaml` as the source
+- [x] generate stable TypeScript types into `sdk/src/generated/`
+- [x] document how and when generated files are refreshed
+- [x] write tests or checks to catch drift between generated output and committed SDK source expectations
+- [x] run codegen and SDK tests before task 3
 
 ### Task 3: Implement shared core contracts and utilities
 

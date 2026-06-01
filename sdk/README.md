@@ -35,6 +35,24 @@ bun test
 
 `bun test` runs the TypeScript build first, then executes smoke tests that verify the public entrypoint and the built package artifacts.
 
+## OpenAPI type generation
+
+The SDK commits generated API types under `sdk/src/generated/` and treats the repository root `openapi.yaml` as the single source of truth.
+
+Refresh generated types whenever `openapi.yaml` changes or before starting work that depends on request/response shapes:
+
+```bash
+bun run codegen
+```
+
+Validate that committed generated files are current:
+
+```bash
+bun run codegen:check
+```
+
+The drift check regenerates the OpenAPI types into a temporary file and fails if that output differs from the committed `sdk/src/generated/openapi.ts`.
+
 ## Status
 
 This task only scaffolds the package boundary and validation flow. Generated API types, concrete clients, runner behavior, and React Native adapters are added in later tasks from the implementation plan.

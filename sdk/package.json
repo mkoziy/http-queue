@@ -42,9 +42,11 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit",
     "test": "bun run build && bun test",
-    "codegen": "node ./scripts/generate-types.mjs"
+    "codegen": "node ./scripts/generate-types.mjs",
+    "codegen:check": "node ./scripts/generate-types.mjs --check"
   },
   "devDependencies": {
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.9.3"
   }
 }
