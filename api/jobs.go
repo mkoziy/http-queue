@@ -11,6 +11,8 @@ import (
 	"github.com/mkoziy/http-queue/queue"
 )
 
+const maxTTLSeconds = int64(1<<63-1) / int64(time.Second)
+
 // JobsHandler handles admin job endpoints.
 type JobsHandler struct {
 	db  *badger.DB
@@ -48,8 +50,8 @@ func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) 
 
 	var expiresAt *time.Time
 	if body.TTL != nil {
-		if *body.TTL <= 0 {
-			respondError(w, http.StatusBadRequest, "ttl must be a positive integer number of seconds or null")
+		if *body.TTL <= 0 || *body.TTL > maxTTLSeconds {
+			respondError(w, http.StatusBadRequest, "ttl must be between 1 and 9223372036 seconds or null")
 			return
 		}
 
@@ -71,4 +73,3 @@ func (h *JobsHandler) HandleScheduleJob(w http.ResponseWriter, r *http.Request) 
 		"ttl":     body.TTL,
 	})
 }
-

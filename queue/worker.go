@@ -311,6 +311,7 @@ func requeueReservedBatch(database *badger.DB, workerID string, refs []reservedR
 		return nil
 	}
 
+	now := time.Now().UTC()
 	err := database.Update(func(txn *badger.Txn) error {
 		for _, ref := range refs {
 			jobItem, err := txn.Get(db.JobKey(ref.ulid))
@@ -332,6 +333,13 @@ func requeueReservedBatch(database *badger.DB, workerID string, refs []reservedR
 
 			// Re-check the job is still reserved and owned by this worker.
 			if j.Status != StatusReserved || j.WorkerID != workerID {
+				continue
+			}
+
+			if isJobExpired(j, now) {
+				if err := deleteJobWithIndexes(txn, j, db.ReservedIndexKey(ref.queue, ref.ulid)); err != nil {
+					return fmt.Errorf("delete expired reserved job %s: %w", ref.ulid, err)
+				}
 				continue
 			}
 

@@ -4,10 +4,12 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---- HandleScheduleJob Tests ----
@@ -142,6 +144,7 @@ func TestHandleScheduleJob_InvalidTTL(t *testing.T) {
 		`{"payload":{"hello":"world"},"ttl":0}`,
 		`{"payload":{"hello":"world"},"ttl":-1}`,
 		`{"payload":{"hello":"world"},"ttl":"600"}`,
+		fmt.Sprintf(`{"payload":{"hello":"world"},"ttl":%d}`, int64(math.MaxInt64/int64(time.Second))+1),
 	}
 
 	for _, body := range testCases {
