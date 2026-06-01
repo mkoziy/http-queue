@@ -134,6 +134,48 @@ func TestNew_WorkerRoutesProtectedByAuth(t *testing.T) {
 	}
 }
 
+func TestNew_AuthFailuresUseGenericPlainTextUnauthorized(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	t.Run("admin auth failure", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/workers", nil)
+		req.SetBasicAuth(cfg.AdminUser, "wrong-pass")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+		if body := rec.Body.String(); body != "Unauthorized\n" {
+			t.Fatalf("body = %q, want %q", body, "Unauthorized\n")
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+			t.Fatalf("Content-Type = %q, want %q", ct, "text/plain; charset=utf-8")
+		}
+	})
+
+	t.Run("worker auth failure", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/queues/testqueue/next", nil)
+		req.Header.Set("Authorization", "Bearer invalid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+		if body := rec.Body.String(); body != "Unauthorized\n" {
+			t.Fatalf("body = %q, want %q", body, "Unauthorized\n")
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+			t.Fatalf("Content-Type = %q, want %q", ct, "text/plain; charset=utf-8")
+		}
+	})
+}
+
 func TestNew_LoggerMiddlewarePresent(t *testing.T) {
 	database, cleanup := openTestDB(t)
 	defer cleanup()
@@ -338,5 +380,4 @@ func TestNew_JSONErrorResponses(t *testing.T) {
 		}
 	})
 }
-
 

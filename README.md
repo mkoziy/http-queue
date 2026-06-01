@@ -167,6 +167,10 @@ Uses HTTP Basic Auth with `ADMIN_USER` and `ADMIN_PASS`.
 
 Uses a bearer token returned at worker registration time.
 
+- the token is opaque and returned only once by `POST /workers`
+- worker requests must send `Authorization: Bearer <token>`
+- missing, malformed, and invalid worker credentials all return the same generic plain-text `401 Unauthorized` response
+
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/queues/{queue}/next` | Claim the next pending job and return `X-Next-Poll-Seconds` |
@@ -191,6 +195,8 @@ Uses a bearer token returned at worker registration time.
 - active workers are counted per queue within `WORKER_NEXT_ACTIVITY_WINDOW`
 - the server computes the hint as `ceil(base_interval * sqrt(active_workers))`, clamped between `WORKER_NEXT_MIN_INTERVAL` and `WORKER_NEXT_MAX_INTERVAL`
 - the activity tracker is in memory, so it resets on process restart and warms back up from subsequent worker polls
+
+For code-generated clients, treat `X-Next-Poll-Seconds` as part of the success contract for both claimed-job and empty-queue responses rather than as a best-effort extra header.
 
 ### Job TTL semantics
 

@@ -17,10 +17,17 @@ components:
     BasicAuth:
       type: http
       scheme: basic
+      description: |
+        Used by admin endpoints. Invalid or missing credentials return the same
+        generic `401 Unauthorized` plain-text response.
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: opaque
+      description: |
+        Used by worker endpoints. The bearer token is the opaque token returned
+        once by `POST /workers`; it is not a JWT. Invalid, missing, or stale
+        tokens return the same generic `401 Unauthorized` plain-text response.
   parameters:
     QueueName:
       name: queue
@@ -91,7 +98,7 @@ components:
           type: string
         token:
           type: string
-          description: Returned only once at worker registration.
+          description: Opaque bearer token returned only once at worker registration.
     ClaimedJobResponse:
       type: object
       additionalProperties: false
@@ -113,7 +120,7 @@ components:
         minimum: 1
   responses:
     UnauthorizedText:
-      description: Unauthorized
+      description: Generic unauthorized response with no credential failure details.
       content:
         text/plain:
           schema:
@@ -175,6 +182,10 @@ paths:
     post:
       tags: [Admin]
       summary: Register a worker
+      description: |
+        Registers a worker and returns its worker ID plus the opaque bearer token
+        used for all worker endpoints. The token is only returned by this response,
+        so callers must persist it themselves.
       security:
         - BasicAuth: []
       responses:
@@ -215,6 +226,9 @@ paths:
         for that queue as `ceil(base_interval * sqrt(active_workers))`, clamped
         by the configured minimum and maximum intervals. The activity tracker is
         in-memory and resets on process restart.
+
+        Authenticate with `Authorization: Bearer <token>` using the opaque token
+        returned once by `POST /workers`.
 
         TTL semantics:
         - expired pending jobs are deleted and skipped

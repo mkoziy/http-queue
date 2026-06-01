@@ -288,11 +288,11 @@
 - Modify: `README.md`
 - Create/Modify: relevant Go tests if API docs or headers change
 
-- [ ] review whether OpenAPI should document worker auth and `X-Next-Poll-Seconds` more explicitly for codegen consumers
-- [ ] review whether any response shapes or error semantics need tightening for SDK stability
-- [ ] add or update tests if server contract changes are made to support the SDK
-- [ ] update docs to reflect any contract clarifications
-- [ ] run Go tests affected by any server-side contract changes
+- [x] review whether OpenAPI should document worker auth and `X-Next-Poll-Seconds` more explicitly for codegen consumers
+- [x] review whether any response shapes or error semantics need tightening for SDK stability
+- [x] add or update tests if server contract changes are made to support the SDK
+- [x] update docs to reflect any contract clarifications
+- [x] run Go tests affected by any server-side contract changes
 
 ## Recommended Decisions To Keep
 - Keep `sdk/` as a single publishable package in v1, even if internal code is modular.

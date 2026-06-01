@@ -29,3 +29,4 @@ data/
 # Project tooling
 .ralpix
 .serena
+.cache/go-build/
