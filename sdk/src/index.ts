@@ -34,6 +34,10 @@ export type {
   WorkerClientOptions,
 } from "./worker/client.js";
 export type {
+  WorkerManagerOptions,
+  WorkerManagerStatus,
+} from "./worker/manager.js";
+export type {
   WorkerJobContext,
   WorkerJobHandler,
   WorkerRunnerOptions,
@@ -45,6 +49,10 @@ export {
 export {
   WorkerClient,
 } from "./worker/client.js";
+export {
+  WorkerManager,
+  createWorkerManager,
+} from "./worker/manager.js";
 export {
   WorkerRunner,
 } from "./worker/runner.js";

@@ -228,12 +228,12 @@
 - Modify: `sdk/src/index.ts`
 - Create: `sdk/tests/worker-manager.test.ts`
 
-- [ ] implement one isolated loop per target key
-- [ ] isolate credentials, state, logging context, and retries per target
-- [ ] ensure failure or `401` on one target does not block other targets
-- [ ] expose a top-level factory for multi-target worker management
-- [ ] write tests for target isolation, independent refresh, and independent timing behavior
-- [ ] run SDK tests before task 9
+- [x] implement one isolated loop per target key
+- [x] isolate credentials, state, logging context, and retries per target
+- [x] ensure failure or `401` on one target does not block other targets
+- [x] expose a top-level factory for multi-target worker management
+- [x] write tests for target isolation, independent refresh, and independent timing behavior
+- [x] run SDK tests before task 9
 
 ### Task 9: Add integration tests against the local Go server
 
