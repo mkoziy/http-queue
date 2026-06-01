@@ -420,6 +420,63 @@ func TestDeregisterWorker_RequeuesReservedJobs(t *testing.T) {
 	}
 }
 
+func TestDeregisterWorker_DeletesExpiredTTLReservedJobs(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+
+	id, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(5 * time.Second)
+	_, err = ScheduleJobWithExpiry(database, "testqueue", []byte(`{"hello":"world"}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "testqueue", id, cfg.VisibilityTimeout)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob returned nil, expected a job")
+	}
+
+	expiredAt := time.Now().UTC().Add(-1 * time.Second)
+	setJobExpiresAt(t, database, claimed.ID, &expiredAt)
+
+	if err := DeregisterWorker(database, id); err != nil {
+		t.Fatalf("DeregisterWorker(): %v", err)
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.JobKey(claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Fatal("expired TTL reserved job still exists after worker deregistration")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.PendingIndexKey("testqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Fatal("pending index exists for expired TTL reserved job after worker deregistration")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.ReservedIndexKey("testqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Fatal("reserved index still exists for expired TTL reserved job after worker deregistration")
+	}
+}
+
 // ---- TouchWorker Tests ----
 
 func TestTouchWorker(t *testing.T) {

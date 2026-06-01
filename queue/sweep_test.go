@@ -112,6 +112,33 @@ func setJobFields(t *testing.T, database *badger.DB, jobID string, opts struct {
 	}
 }
 
+func setJobExpiresAt(t *testing.T, database *badger.DB, jobID string, expiresAt *time.Time) {
+	t.Helper()
+	err := database.Update(func(txn *badger.Txn) error {
+		item, err := txn.Get(db.JobKey(jobID))
+		if err != nil {
+			return fmt.Errorf("get job %s: %w", jobID, err)
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return fmt.Errorf("value copy: %w", err)
+		}
+		var j Job
+		if err := json.Unmarshal(data, &j); err != nil {
+			return fmt.Errorf("unmarshal job: %w", err)
+		}
+		j.ExpiresAt = expiresAt
+		updated, err := json.Marshal(j)
+		if err != nil {
+			return fmt.Errorf("marshal job: %w", err)
+		}
+		return txn.Set(db.JobKey(jobID), updated)
+	})
+	if err != nil {
+		t.Fatalf("setJobExpiresAt: %v", err)
+	}
+}
+
 // deleteKey removes a single key from the database.
 func deleteKey(t *testing.T, database *badger.DB, key []byte) {
 	t.Helper()
@@ -304,6 +331,49 @@ func TestSweep_ExpiredReservation_Requeued(t *testing.T) {
 	}
 }
 
+func TestSweep_ExpiredReservation_DeletesExpiredTTLJob(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+	expiresAt := time.Now().UTC().Add(5 * time.Second)
+	_, err := ScheduleJobWithExpiry(database, "testqueue", json.RawMessage(`{"n":1}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "testqueue", "worker-1", cfg.VisibilityTimeout)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob() returned nil")
+	}
+
+	past := time.Now().UTC().Add(-1 * time.Hour)
+	setJobExpiresAt(t, database, claimed.ID, &past)
+	setReservedExpiry(t, database, "testqueue", claimed.ID, past)
+
+	sweeper := NewSweeper(database, cfg)
+	sweeper.expireReservations()
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.JobKey(claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired TTL reserved job still exists after sweep")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.ReservedIndexKey("testqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired TTL reserved index still exists after sweep")
+	}
+}
+
 func TestSweep_ExpiredReservation_DeadLetter(t *testing.T) {
 	database, cleanup := openTestDB(t)
 	defer cleanup()
@@ -449,6 +519,74 @@ func TestSweep_NonExpiredReservation_Untouched(t *testing.T) {
 	if err != nil {
 		t.Error("reserved index should still exist for non-expired reservation")
 	}
+}
+
+func TestSweep_ExpiredPendingJobDeleted(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+	expiresAt := time.Now().UTC().Add(-1 * time.Hour)
+	job, err := ScheduleJobWithExpiry(database, "testqueue", json.RawMessage(`{"expired":true}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(): %v", err)
+	}
+
+	sweeper := NewSweeper(database, cfg)
+	sweeper.expirePendingJobs()
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.JobKey(job.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired pending job still exists after sweep")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.PendingIndexKey("testqueue", job.ID))
+		return err
+	})
+	if err == nil {
+		t.Error("expired pending index still exists after sweep")
+	}
+}
+
+func TestSweep_DeadJobIgnoresTTL(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+	job, err := ScheduleJob(database, "testqueue", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("ScheduleJob(): %v", err)
+	}
+
+	setJobFields(t, database, job.ID, struct {
+		Status   JobStatus
+		WorkerID string
+		Attempts int
+		Queue    string
+	}{
+		Status: StatusDead,
+		Queue:  "testqueue",
+	})
+	past := time.Now().UTC().Add(-1 * time.Hour)
+	setJobExpiresAt(t, database, job.ID, &past)
+
+	deleteKey(t, database, db.PendingIndexKey("testqueue", job.ID))
+	err = database.Update(func(txn *badger.Txn) error {
+		return txn.Set(db.DeadIndexKey("testqueue", job.ID), nil)
+	})
+	if err != nil {
+		t.Fatalf("set dead index: %v", err)
+	}
+
+	sweeper := NewSweeper(database, cfg)
+	sweeper.expirePendingJobs()
+	sweeper.expireReservations()
+
+	verifyJobInvariants(t, database, job.ID, "testqueue")
 }
 
 // ---- Expired Workers ----
@@ -625,6 +763,65 @@ func TestSweep_ExpiredWorker_RequeuesReservedJobs(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("reserved index should be gone after worker expiry")
+	}
+}
+
+func TestSweep_ExpiredWorker_DeletesExpiredTTLReservedJob(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := sweepTestConfig()
+
+	id, _, err := RegisterWorker(database, cfg)
+	if err != nil {
+		t.Fatalf("RegisterWorker(): %v", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(5 * time.Second)
+	_, err = ScheduleJobWithExpiry(database, "testqueue", []byte(`{"hello":"world"}`), &expiresAt)
+	if err != nil {
+		t.Fatalf("ScheduleJobWithExpiry(): %v", err)
+	}
+
+	claimed, err := ClaimNextJob(database, "testqueue", id, cfg.VisibilityTimeout)
+	if err != nil {
+		t.Fatalf("ClaimNextJob(): %v", err)
+	}
+	if claimed == nil {
+		t.Fatal("ClaimNextJob() returned nil")
+	}
+
+	expiredAt := time.Now().UTC().Add(-1 * time.Second)
+	setJobExpiresAt(t, database, claimed.ID, &expiredAt)
+	setWorkerLastSeen(t, database, id, time.Now().UTC().Add(-1*time.Hour))
+	workerLastSeen.Delete(id)
+	workerLastSeen.Delete("flush:" + id)
+
+	sweeper := NewSweeper(database, cfg)
+	sweeper.expireWorkers()
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.JobKey(claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Fatal("expired TTL reserved job still exists after expired worker sweep")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.PendingIndexKey("testqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Fatal("pending index exists for expired TTL reserved job after expired worker sweep")
+	}
+
+	err = database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(db.ReservedIndexKey("testqueue", claimed.ID))
+		return err
+	})
+	if err == nil {
+		t.Fatal("reserved index still exists for expired TTL reserved job after expired worker sweep")
 	}
 }
 

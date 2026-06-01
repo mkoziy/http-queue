@@ -1,0 +1,264 @@
+openapi: 3.1.0
+info:
+  title: http-queue API
+  version: "1.0.0"
+  description: |
+    Durable HTTP queue engine backed by BadgerDB.
+
+    Admin endpoints use HTTP Basic authentication.
+    Worker endpoints use Bearer tokens returned by `POST /workers`.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Admin
+  - name: Worker
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    QueueName:
+      name: queue
+      in: path
+      required: true
+      description: Queue name. Must not contain `:` or `/`.
+      schema:
+        type: string
+    JobID:
+      name: id
+      in: path
+      required: true
+      description: Job ULID.
+      schema:
+        type: string
+    WorkerID:
+      name: id
+      in: path
+      required: true
+      description: Worker ULID.
+      schema:
+        type: string
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+    ScheduleJobRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        payload: {}
+        ttl:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          description: Optional job TTL in seconds. `null` or omission means no TTL.
+    ScheduleJobResponse:
+      type: object
+      additionalProperties: false
+      required: [id, queue, status, created]
+      properties:
+        id:
+          type: string
+        queue:
+          type: string
+        status:
+          type: string
+          enum: [pending]
+        created:
+          type: string
+          format: date-time
+        ttl:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+    RegisterWorkerResponse:
+      type: object
+      additionalProperties: false
+      required: [worker_id, token]
+      properties:
+        worker_id:
+          type: string
+        token:
+          type: string
+          description: Returned only once at worker registration.
+    ClaimedJobResponse:
+      type: object
+      additionalProperties: false
+      required: [id, queue, payload, attempts]
+      properties:
+        id:
+          type: string
+        queue:
+          type: string
+        payload: {}
+        attempts:
+          type: integer
+          minimum: 1
+  responses:
+    UnauthorizedText:
+      description: Unauthorized
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Unauthorized
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+paths:
+  /queues/{queue}/jobs:
+    post:
+      tags: [Admin]
+      summary: Schedule a new job
+      security:
+        - BasicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleJobRequest"
+            examples:
+              noTTL:
+                summary: Schedule without TTL
+                value:
+                  payload:
+                    orderId: 42
+                    action: process
+              withTTL:
+                summary: Schedule with TTL
+                value:
+                  payload:
+                    orderId: 42
+                    action: process
+                  ttl: 600
+      responses:
+        "201":
+          description: Job scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedText"
+  /workers:
+    post:
+      tags: [Admin]
+      summary: Register a worker
+      security:
+        - BasicAuth: []
+      responses:
+        "201":
+          description: Worker registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterWorkerResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedText"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /workers/{id}:
+    delete:
+      tags: [Admin]
+      summary: Deregister a worker and requeue its reserved jobs
+      security:
+        - BasicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkerID"
+      responses:
+        "204":
+          description: Worker deregistered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedText"
+  /queues/{queue}/next:
+    get:
+      tags: [Worker]
+      summary: Claim the next pending job
+      description: |
+        Returns `204 No Content` when the queue is empty.
+
+        TTL semantics:
+        - expired pending jobs are deleted and skipped
+        - jobs already claimed before TTL expiry may still be acknowledged later
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueName"
+      responses:
+        "200":
+          description: Job claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimedJobResponse"
+        "204":
+          description: Queue is empty
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedText"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /jobs/{id}/ack:
+    post:
+      tags: [Worker]
+      summary: Acknowledge a claimed job
+      description: |
+        A claimed job can still be acknowledged successfully even if its wall-clock TTL has elapsed.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobID"
+      responses:
+        "204":
+          description: Job acknowledged and removed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedText"
+  /jobs/{id}/nack:
+    post:
+      tags: [Worker]
+      summary: Negative-acknowledge a claimed job
+      description: |
+        Requeues the job unless one of the following is true:
+        - `attempts >= MAX_ATTEMPTS`, in which case the job moves to dead-letter
+        - the job TTL has elapsed, in which case the job is deleted
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobID"
+      responses:
+        "204":
+          description: Job requeued, dead-lettered, or deleted due to TTL
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedText"

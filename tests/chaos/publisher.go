@@ -13,6 +13,7 @@ type publisherPool struct {
 	n      int
 	queues []string
 	canary string
+	visTmt time.Duration
 	ac     *apiClient
 	log    *slog.Logger
 	stats  *counters
@@ -55,10 +56,15 @@ func (p *publisherPool) loop(ctx context.Context, wg *sync.WaitGroup, salt uint6
 			"marker": marker,
 			"ts":     time.Now().UnixMilli(),
 		}
+		ttl := pickTTLVariant(rng, p.visTmt)
+		payload["ttl_variant"] = ttl.Name
+		if ttl.Seconds != nil {
+			payload["ttl_seconds"] = *ttl.Seconds
+		}
 
-		log.Debug("publishing job", "queue", queue, "marker", marker)
+		log.Debug("publishing job", "queue", queue, "marker", marker, "ttl_variant", ttl.Name)
 		start := time.Now()
-		resp, err := p.ac.PublishJob(ctx, queue, payload)
+		resp, err := p.ac.PublishJob(ctx, queue, payload, ttl.Seconds)
 		dur := time.Since(start)
 
 		if err != nil {
@@ -70,22 +76,27 @@ func (p *publisherPool) loop(ctx context.Context, wg *sync.WaitGroup, salt uint6
 			p.events.Write("warn", "publisher", "publish_failed", map[string]any{
 				"queue":       queue,
 				"marker":      marker,
+				"ttl_variant": ttl.Name,
+				"ttl_seconds": ttl.SecondsValue(),
 				"duration_ms": dur.Milliseconds(),
 				"err":         err.Error(),
 			})
 		} else {
 			p.stats.publishes.Add(1)
-			p.ledger.recordPublish(resp.ID, queue, marker, time.Now())
+			p.ledger.recordPublish(resp.ID, queue, marker, ttl.Name, ttl.Seconds, resp.CreatedAt)
 			log.Info("published job",
 				"job_id", resp.ID,
 				"queue", queue,
 				"marker", marker,
+				"ttl_variant", ttl.Name,
 				"duration_ms", dur.Milliseconds(),
 			)
 			p.events.Write("info", "publisher", "job_published", map[string]any{
 				"job_id":      resp.ID,
 				"queue":       queue,
 				"marker":      marker,
+				"ttl_variant": ttl.Name,
+				"ttl_seconds": ttl.SecondsValue(),
 				"duration_ms": dur.Milliseconds(),
 			})
 		}

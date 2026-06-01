@@ -52,12 +52,14 @@ func (s *Sweeper) Start(ctx context.Context) {
 // run immediately on startup. Worker expiry is excluded so that durable
 // workers whose LastSeen is stale are not removed before they can reconnect.
 func (s *Sweeper) startupSweep() {
+	s.expirePendingJobs()
 	s.expireReservations()
 	s.reconcile()
 }
 
 func (s *Sweeper) sweep() {
 	s.expireWorkers()
+	s.expirePendingJobs()
 	s.expireReservations()
 	s.reconcile()
 }
@@ -186,6 +188,104 @@ func (s *Sweeper) expireReservations() {
 	}
 }
 
+// expirePendingJobs deletes pending jobs whose per-job TTL has elapsed.
+func (s *Sweeper) expirePendingJobs() {
+	now := time.Now().UTC()
+	var refs []reservedRef
+
+	err := s.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		prefix := []byte("queue:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+			if !strings.Contains(key, ":pending:") {
+				continue
+			}
+
+			parts := strings.SplitN(key, ":", 4)
+			if len(parts) < 4 {
+				continue
+			}
+
+			jobItem, err := txn.Get(db.JobKey(parts[3]))
+			if err != nil {
+				continue
+			}
+			jobData, err := jobItem.ValueCopy(nil)
+			if err != nil {
+				continue
+			}
+
+			var job Job
+			if err := json.Unmarshal(jobData, &job); err != nil {
+				continue
+			}
+			if job.Status != StatusPending || !isJobExpired(job, now) {
+				continue
+			}
+
+			refs = append(refs, reservedRef{
+				queue: parts[1],
+				ulid:  parts[3],
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("sweep: view expired pending jobs: %v", err)
+		return
+	}
+
+	for batchIdx, batch := range batchSlice(refs, maintenanceBatchSize) {
+		if err := s.expirePendingBatch(now, batch); err != nil {
+			log.Printf("sweep: expire pending jobs batch %d: %v", batchIdx, err)
+		}
+	}
+}
+
+func (s *Sweeper) expirePendingBatch(now time.Time, refs []reservedRef) error {
+	if len(refs) == 0 {
+		return nil
+	}
+
+	err := s.db.Update(func(txn *badger.Txn) error {
+		for _, ref := range refs {
+			pendingKey := db.PendingIndexKey(ref.queue, ref.ulid)
+
+			jobItem, err := txn.Get(db.JobKey(ref.ulid))
+			if err != nil {
+				_ = txn.Delete(pendingKey)
+				continue
+			}
+			jobData, err := jobItem.ValueCopy(nil)
+			if err != nil {
+				continue
+			}
+
+			var job Job
+			if err := json.Unmarshal(jobData, &job); err != nil {
+				continue
+			}
+			if job.Status != StatusPending || !isJobExpired(job, now) {
+				continue
+			}
+
+			if err := deleteJobWithIndexes(txn, job, pendingKey); err != nil {
+				return fmt.Errorf("delete expired pending job %s: %w", ref.ulid, err)
+			}
+			log.Printf("sweep: expired pending job %s deleted", ref.ulid)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("process expired pending batch: %w", err)
+	}
+	return nil
+}
+
 // expireReservationBatch re-queues or dead-letters a batch of expired reservation
 // refs in a single write transaction. Each ref is re-checked: the reserved index
 // must still exist and still be expired, and the job record is loaded fresh.
@@ -235,6 +335,14 @@ func (s *Sweeper) expireReservationBatch(now int64, refs []reservedRef) error {
 
 			var job Job
 			if err := json.Unmarshal(jobData, &job); err != nil {
+				continue
+			}
+
+			if isJobExpired(job, time.Unix(now, 0).UTC()) {
+				if err := deleteJobWithIndexes(txn, job, reservedKey); err != nil {
+					return fmt.Errorf("delete expired reserved job %s: %w", ref.ulid, err)
+				}
+				log.Printf("sweep: expired reserved job %s deleted", ref.ulid)
 				continue
 			}
 
