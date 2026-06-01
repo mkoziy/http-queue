@@ -274,12 +274,12 @@
 - Create: `sdk/Makefile` or `sdk/scripts/release.*`
 - Modify: root `README.md`
 
-- [ ] define SDK versioning independent from Go server releases
-- [ ] add publish scripts that run from `sdk/` only
-- [ ] ensure generated files and build output are included correctly in published artifacts
-- [ ] document release steps and required registry credentials
-- [ ] write release smoke checks to verify package contents before publish
-- [ ] run build/test/publish dry-run checks before task 12
+- [x] define SDK versioning independent from Go server releases
+- [x] add publish scripts that run from `sdk/` only
+- [x] ensure generated files and build output are included correctly in published artifacts
+- [x] document release steps and required registry credentials
+- [x] write release smoke checks to verify package contents before publish
+- [x] run build/test/publish dry-run checks before task 12
 
 ### Task 12: Optional server-side follow-ups for SDK ergonomics
 

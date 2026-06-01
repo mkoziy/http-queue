@@ -455,6 +455,20 @@ The release target:
 
 Use semantic versioning: `X.Y.Z`.
 
+### SDK releases
+
+The JavaScript/TypeScript SDK under [`sdk/`](sdk) has its own npm release flow and versioning. Do not use the root `make release` target for SDK publishes.
+
+From `sdk/`:
+
+```bash
+bun run release:check
+bun run release:dry-run
+bun run release:publish
+```
+
+SDK releases require npm package ownership plus an npm auth token in `~/.npmrc` or `NPM_TOKEN`. The SDK version in `sdk/package.json` and entries in `sdk/CHANGELOG.md` move independently from the Go server tags and GHCR image tags.
+
 ## License
 
 MIT

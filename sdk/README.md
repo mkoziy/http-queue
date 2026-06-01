@@ -184,3 +184,44 @@ bun run test:integration
 ```
 
 The integration helper builds the local Go server, boots it with an isolated temporary BadgerDB path, and exercises the public SDK clients and runner against the live HTTP API.
+
+## Releasing
+
+The SDK is released independently from the Go server. Cut SDK versions from `sdk/package.json` and `sdk/CHANGELOG.md`; they do not need to match the repository's Git tags used for the Go binary and container images.
+
+Required credentials:
+
+- npm package ownership for `http-queue-sdk`
+- an npm auth token available through `~/.npmrc` or `NPM_TOKEN`
+
+Before publishing, update the SDK version and changelog entry from `sdk/`:
+
+```bash
+npm version 0.1.1 --no-git-tag-version
+```
+
+Run the full release gate:
+
+```bash
+bun run release:check
+```
+
+That command runs linting, OpenAPI drift verification, unit tests, example checks, and a package smoke check based on `npm pack --dry-run`.
+
+Verify the publishable package without uploading anything:
+
+```bash
+bun run release:dry-run
+```
+
+Publish the SDK from `sdk/` only:
+
+```bash
+bun run release:publish
+```
+
+The published package is intentionally limited to built output and release docs:
+
+- `dist/**`, including generated OpenAPI runtime and type files
+- `README.md`
+- `CHANGELOG.md`

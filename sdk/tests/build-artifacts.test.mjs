@@ -20,5 +20,11 @@ describe("built package artifacts", () => {
     expect(packageJson.exports["."].types).toBe("./dist/index.d.ts");
     expect(packageJson.types).toBe("./dist/index.d.ts");
     expect(packageJson.files).toContain("dist");
+    expect(packageJson.files).toContain("CHANGELOG.md");
+    expect(packageJson.publishConfig.access).toBe("public");
+    expect(packageJson.scripts["release:check"]).toBeDefined();
+    expect(packageJson.scripts["release:dry-run"]).toBeDefined();
+    expect(packageJson.scripts["release:publish"]).toBeDefined();
+    expect(packageJson.version).not.toBe("0.0.0");
   });
 });

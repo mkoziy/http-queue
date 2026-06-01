@@ -1,10 +1,13 @@
 {
   "name": "http-queue-sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "JavaScript and TypeScript SDK for http-queue admin and worker clients.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mkoziy/http-queue.git",
@@ -28,7 +31,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "exports": {
     ".": {
@@ -42,10 +46,15 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "tsc --noEmit",
     "examples:check": "tsc -p tsconfig.examples.json --noEmit",
+    "package:check": "node ./scripts/check-package.mjs",
+    "release:check": "bun run lint && bun run codegen:check && bun run test && bun run package:check",
+    "release:dry-run": "node ./scripts/release.mjs --dry-run",
+    "release:publish": "node ./scripts/release.mjs",
     "test": "bun run build && bun run examples:check && bun test tests/*.test.ts tests/*.test.mjs tests/core/*.test.ts",
     "test:integration": "bun run build && bun test tests/integration/*.test.ts",
     "codegen": "node ./scripts/generate-types.mjs",
-    "codegen:check": "node ./scripts/generate-types.mjs --check"
+    "codegen:check": "node ./scripts/generate-types.mjs --check",
+    "prepublishOnly": "bun run release:check"
   },
   "devDependencies": {
     "openapi-typescript": "^7.13.0",
