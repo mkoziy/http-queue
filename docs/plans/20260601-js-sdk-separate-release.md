@@ -167,12 +167,12 @@
 - Create: `sdk/tests/admin-client.test.ts`
 - Create: `sdk/tests/worker-client.test.ts`
 
-- [ ] implement `AdminClient` methods for scheduling jobs, registering workers, and deregistering workers
-- [ ] implement `WorkerClient` methods for claim-next, ack, and nack
-- [ ] parse and expose `X-Next-Poll-Seconds` from worker claim responses
-- [ ] keep auth strategy explicit: Basic Auth for admin, bearer token for worker
-- [ ] write unit tests for success, auth failure, bad response, and header parsing cases
-- [ ] run SDK tests before task 5
+- [x] implement `AdminClient` methods for scheduling jobs, registering workers, and deregistering workers
+- [x] implement `WorkerClient` methods for claim-next, ack, and nack
+- [x] parse and expose `X-Next-Poll-Seconds` from worker claim responses
+- [x] keep auth strategy explicit: Basic Auth for admin, bearer token for worker
+- [x] write unit tests for success, auth failure, bad response, and header parsing cases
+- [x] run SDK tests before task 5
 
 ### Task 5: Implement persisted target state and state store adapters
 
