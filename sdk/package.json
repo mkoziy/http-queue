@@ -1,0 +1,50 @@
+{
+  "name": "http-queue-sdk",
+  "version": "0.0.0",
+  "description": "JavaScript and TypeScript SDK for http-queue admin and worker clients.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mkoziy/http-queue.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/mkoziy/http-queue#readme",
+  "bugs": {
+    "url": "https://github.com/mkoziy/http-queue/issues"
+  },
+  "keywords": [
+    "http-queue",
+    "queue",
+    "jobs",
+    "worker",
+    "typescript",
+    "bun"
+  ],
+  "engines": {
+    "bun": ">=1.3.0",
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "tsc --noEmit",
+    "test": "bun run build && bun test",
+    "codegen": "node ./scripts/generate-types.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
