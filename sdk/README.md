@@ -70,6 +70,24 @@ The SDK exposes:
 
 Persisted state version mismatches are treated as a recoverable cache miss and cleared automatically by the React Native target-state store. Corrupted JSON still fails loudly so broken state is visible during development and integration.
 
+## Integration tests
+
+The SDK also has real-server integration tests under `sdk/tests/integration/`. They build the local Go server, boot it with an isolated temporary BadgerDB path, and exercise the public SDK clients and runner against the live HTTP API.
+
+Run the fast unit suite:
+
+```bash
+bun run test
+```
+
+Run the integration suite:
+
+```bash
+bun run test:integration
+```
+
+The integration helper uses the same local process model as the repository's existing E2E flow: dynamic port assignment, temporary state on disk, and short sweep/visibility timings so runner behavior stays deterministic.
+
 ## Status
 
 This task only scaffolds the package boundary and validation flow. Generated API types, concrete clients, runner behavior, and React Native adapters are added in later tasks from the implementation plan.

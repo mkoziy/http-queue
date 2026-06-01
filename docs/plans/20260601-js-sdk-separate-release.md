@@ -243,12 +243,12 @@
 - Modify: `sdk/package.json`
 - Modify: root `README.md` or `sdk/README.md`
 
-- [ ] add test helpers to boot or connect to a local `http-queue` server
-- [ ] verify admin client can create jobs and register workers against the real API
-- [ ] verify worker client and runner can claim, ack, nack, and respect next-poll headers
-- [ ] verify credential replacement path with proxy-style credential injection in tests
-- [ ] document how to run SDK integration tests locally from `sdk/`
-- [ ] run unit and integration tests before task 10
+- [x] add test helpers to boot or connect to a local `http-queue` server
+- [x] verify admin client can create jobs and register workers against the real API
+- [x] verify worker client and runner can claim, ack, nack, and respect next-poll headers
+- [x] verify credential replacement path with proxy-style credential injection in tests
+- [x] document how to run SDK integration tests locally from `sdk/`
+- [x] run unit and integration tests before task 10
 
 ### Task 10: Add examples and consumer-facing documentation
 
