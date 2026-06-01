@@ -105,7 +105,7 @@ func (c *controller) doBurstPublish(ctx context.Context, rng interface{ IntN(int
 			continue
 		}
 		c.stats.publishes.Add(1)
-		c.ledger.recordPublish(resp.ID, queue, "burst", ttl.Name, ttl.Seconds, time.Now())
+		c.ledger.recordPublish(resp.ID, queue, "burst", ttl.Name, ttl.Seconds, resp.CreatedAt)
 		log.Debug("burst job published", "job_id", resp.ID, "queue", queue, "ttl_variant", ttl.Name)
 		c.events.Write("info", "controller", "job_published", map[string]any{
 			"job_id":      resp.ID,

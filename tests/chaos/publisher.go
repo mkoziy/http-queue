@@ -83,7 +83,7 @@ func (p *publisherPool) loop(ctx context.Context, wg *sync.WaitGroup, salt uint6
 			})
 		} else {
 			p.stats.publishes.Add(1)
-			p.ledger.recordPublish(resp.ID, queue, marker, ttl.Name, ttl.Seconds, time.Now())
+			p.ledger.recordPublish(resp.ID, queue, marker, ttl.Name, ttl.Seconds, resp.CreatedAt)
 			log.Info("published job",
 				"job_id", resp.ID,
 				"queue", queue,

@@ -7,12 +7,12 @@ import (
 
 // publishedEntry records a successfully published job.
 type publishedEntry struct {
-	ID          string
-	Queue       string
-	Marker      string
-	TTLVariant  string
-	TTLSeconds  *int64
-	PublishedAt time.Time
+	ID         string
+	Queue      string
+	Marker     string
+	TTLVariant string
+	TTLSeconds *int64
+	EnqueuedAt time.Time
 }
 
 // claimEntry records a successful job claim.
@@ -67,12 +67,12 @@ func (l *ledger) recordPublish(id, queue, marker, ttlVariant string, ttlSeconds 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.published[id] = publishedEntry{
-		ID:          id,
-		Queue:       queue,
-		Marker:      marker,
-		TTLVariant:  ttlVariant,
-		TTLSeconds:  ttlSeconds,
-		PublishedAt: at,
+		ID:         id,
+		Queue:      queue,
+		Marker:     marker,
+		TTLVariant: ttlVariant,
+		TTLSeconds: ttlSeconds,
+		EnqueuedAt: at,
 	}
 }
 

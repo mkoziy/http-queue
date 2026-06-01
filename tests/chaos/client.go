@@ -125,8 +125,9 @@ type RegisterWorkerResp struct {
 
 // PublishJobResp is the decoded body of POST /queues/{queue}/jobs.
 type PublishJobResp struct {
-	ID    string `json:"id"`
-	Queue string `json:"queue"`
+	ID        string    `json:"id"`
+	Queue     string    `json:"queue"`
+	CreatedAt time.Time `json:"created"`
 }
 
 type publishJobReq struct {

@@ -289,7 +289,7 @@ func publishTTLExpired(pub publishedEntry, now time.Time) bool {
 	if pub.TTLSeconds == nil {
 		return false
 	}
-	expiry := pub.PublishedAt.Add(time.Duration(*pub.TTLSeconds) * time.Second)
+	expiry := pub.EnqueuedAt.Add(time.Duration(*pub.TTLSeconds) * time.Second)
 	return !now.Before(expiry)
 }
 
