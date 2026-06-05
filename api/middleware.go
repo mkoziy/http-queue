@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
@@ -35,6 +36,7 @@ func BasicAuth(cfg *config.Config) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, pass, ok := r.BasicAuth()
 			if !ok {
+				w.Header().Set("WWW-Authenticate", `Basic realm="http-queue admin"`)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -43,6 +45,7 @@ func BasicAuth(cfg *config.Config) func(http.Handler) http.Handler {
 			passMatch := subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.AdminPass)) == 1
 
 			if !userMatch || !passMatch {
+				w.Header().Set("WWW-Authenticate", `Basic realm="http-queue admin"`)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -108,4 +111,20 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 // respondError writes a JSON error response.
 func respondError(w http.ResponseWriter, status int, msg string) {
 	respondJSON(w, status, map[string]string{"error": msg})
+}
+
+// parsePaginationParams extracts and validates ?limit and ?cursor query params.
+// Returns (limit, cursor, ok); writes a 400 and returns ok=false on invalid input.
+func parsePaginationParams(w http.ResponseWriter, r *http.Request) (int, string, bool) {
+	limit := queue.DefaultListLimit
+	if s := r.URL.Query().Get("limit"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 || n > queue.MaxListLimit {
+			respondError(w, http.StatusBadRequest, "limit must be between 1 and 1000")
+			return 0, "", false
+		}
+		limit = n
+	}
+	cursor := r.URL.Query().Get("cursor")
+	return limit, cursor, true
 }

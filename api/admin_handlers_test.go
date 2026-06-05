@@ -318,8 +318,8 @@ func TestHandleScheduleJob_WrongMethod(t *testing.T) {
 	cfg := testConfig()
 	router := New(database, cfg)
 
-	// GET instead of POST should not match the route.
-	req := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs", nil)
+	// PATCH instead of POST should not match the route.
+	req := httptest.NewRequest(http.MethodPatch, "/queues/testqueue/jobs", nil)
 	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
 	rec := httptest.NewRecorder()
 
@@ -762,6 +762,430 @@ func TestHandleDeregisterWorker_RequeuesReservedJobs(t *testing.T) {
 		if reClaimed["id"] != jobID {
 			t.Errorf("re-claimed job ID = %v, want %q", reClaimed["id"], jobID)
 		}
+	}
+}
+
+// ---- HandleListWorkers Tests ----
+
+func TestHandleListWorkers_Empty(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	items := resp["items"].([]interface{})
+	if len(items) != 0 {
+		t.Errorf("items len = %d, want 0", len(items))
+	}
+	if _, ok := resp["next_cursor"]; ok {
+		t.Error("next_cursor should be absent on last page")
+	}
+}
+
+func TestHandleListWorkers_ReturnsList(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	// Register three workers.
+	var workerIDs []string
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/workers", nil)
+		req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("register worker %d: status = %d", i, rec.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode register response: %v", err)
+		}
+		workerIDs = append(workerIDs, resp["worker_id"])
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	items := resp["items"].([]interface{})
+	if len(items) != 3 {
+		t.Errorf("items len = %d, want 3", len(items))
+	}
+
+	// Verify no token_hash in response.
+	for _, item := range items {
+		m := item.(map[string]interface{})
+		if _, ok := m["tokenHash"]; ok {
+			t.Error("response must not include tokenHash")
+		}
+		if m["id"] == nil || m["id"] == "" {
+			t.Error("item missing id")
+		}
+		if m["registered_at"] == nil {
+			t.Error("item missing registered_at")
+		}
+		if m["last_seen"] == nil {
+			t.Error("item missing last_seen")
+		}
+	}
+}
+
+func TestHandleListWorkers_Pagination(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	// Register 5 workers.
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/workers", nil)
+		req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("register worker %d: status = %d", i, rec.Code)
+		}
+	}
+
+	// Page 1: limit=2.
+	req1 := httptest.NewRequest(http.MethodGet, "/workers?limit=2", nil)
+	req1.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("page1 status = %d", rec1.Code)
+	}
+	var page1 map[string]interface{}
+	if err := json.NewDecoder(rec1.Body).Decode(&page1); err != nil {
+		t.Fatalf("decode page1: %v", err)
+	}
+	if len(page1["items"].([]interface{})) != 2 {
+		t.Errorf("page1 items = %d, want 2", len(page1["items"].([]interface{})))
+	}
+	cursor, ok := page1["next_cursor"].(string)
+	if !ok || cursor == "" {
+		t.Fatal("page1 missing next_cursor")
+	}
+
+	// Page 2: limit=2, cursor from page 1.
+	req2 := httptest.NewRequest(http.MethodGet, "/workers?limit=2&cursor="+cursor, nil)
+	req2.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("page2 status = %d", rec2.Code)
+	}
+	var page2 map[string]interface{}
+	if err := json.NewDecoder(rec2.Body).Decode(&page2); err != nil {
+		t.Fatalf("decode page2: %v", err)
+	}
+	if len(page2["items"].([]interface{})) != 2 {
+		t.Errorf("page2 items = %d, want 2", len(page2["items"].([]interface{})))
+	}
+	cursor2, ok := page2["next_cursor"].(string)
+	if !ok || cursor2 == "" {
+		t.Fatal("page2 missing next_cursor")
+	}
+
+	// Page 3: limit=2, cursor from page 2 — should have 1 item and no next_cursor.
+	req3 := httptest.NewRequest(http.MethodGet, "/workers?limit=2&cursor="+cursor2, nil)
+	req3.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec3 := httptest.NewRecorder()
+	router.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("page3 status = %d", rec3.Code)
+	}
+	var page3 map[string]interface{}
+	if err := json.NewDecoder(rec3.Body).Decode(&page3); err != nil {
+		t.Fatalf("decode page3: %v", err)
+	}
+	if len(page3["items"].([]interface{})) != 1 {
+		t.Errorf("page3 items = %d, want 1", len(page3["items"].([]interface{})))
+	}
+	if _, ok := page3["next_cursor"]; ok {
+		t.Error("page3 should have no next_cursor (last page)")
+	}
+}
+
+func TestHandleListWorkers_InvalidLimit(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	for _, qs := range []string{"?limit=0", "?limit=-1", "?limit=1001", "?limit=abc"} {
+		req := httptest.NewRequest(http.MethodGet, "/workers"+qs, nil)
+		req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("qs=%q status = %d, want 400", qs, rec.Code)
+		}
+	}
+}
+
+func TestHandleListWorkers_NoAuth(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// ---- HandleListJobs Tests ----
+
+func TestHandleListJobs_Empty(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs", nil)
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	items := resp["items"].([]interface{})
+	if len(items) != 0 {
+		t.Errorf("items len = %d, want 0", len(items))
+	}
+}
+
+func TestHandleListJobs_DefaultStatusIsPending(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	// Schedule a job.
+	body := `{"payload":{"key":"value"}}`
+	req := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(body))
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("schedule: status = %d", rec.Code)
+	}
+
+	// List without explicit status — defaults to pending.
+	listReq := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs", nil)
+	listReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	listRec := httptest.NewRecorder()
+	router.ServeHTTP(listRec, listReq)
+
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status = %d", listRec.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(listRec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	items := resp["items"].([]interface{})
+	if len(items) != 1 {
+		t.Errorf("items len = %d, want 1", len(items))
+	}
+}
+
+func TestHandleListJobs_StatusFilter(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	// Register a worker and schedule + claim a job to get it into reserved.
+	_, workerToken := registerTestWorker(t, database)
+
+	schedBody := `{"payload":{}}`
+	schedReq := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(schedBody))
+	schedReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	schedRec := httptest.NewRecorder()
+	router.ServeHTTP(schedRec, schedReq)
+	if schedRec.Code != http.StatusCreated {
+		t.Fatalf("schedule status = %d", schedRec.Code)
+	}
+
+	claimReq := httptest.NewRequest(http.MethodGet, "/queues/testqueue/next", nil)
+	claimReq.Header.Set("Authorization", "Bearer "+workerToken)
+	claimRec := httptest.NewRecorder()
+	router.ServeHTTP(claimRec, claimReq)
+	if claimRec.Code != http.StatusOK {
+		t.Fatalf("claim status = %d", claimRec.Code)
+	}
+
+	// pending list should be empty.
+	pendReq := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs?status=pending", nil)
+	pendReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	pendRec := httptest.NewRecorder()
+	router.ServeHTTP(pendRec, pendReq)
+	var pendResp map[string]interface{}
+	if err := json.NewDecoder(pendRec.Body).Decode(&pendResp); err != nil {
+		t.Fatalf("decode pending: %v", err)
+	}
+	if len(pendResp["items"].([]interface{})) != 0 {
+		t.Error("pending should be empty after claim")
+	}
+
+	// reserved list should have 1 job.
+	resReq := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs?status=reserved", nil)
+	resReq.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	resRec := httptest.NewRecorder()
+	router.ServeHTTP(resRec, resReq)
+	var resResp map[string]interface{}
+	if err := json.NewDecoder(resRec.Body).Decode(&resResp); err != nil {
+		t.Fatalf("decode reserved: %v", err)
+	}
+	if len(resResp["items"].([]interface{})) != 1 {
+		t.Errorf("reserved items = %d, want 1", len(resResp["items"].([]interface{})))
+	}
+}
+
+func TestHandleListJobs_InvalidStatus(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs?status=unknown", nil)
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleListJobs_Pagination(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	// Schedule 5 jobs.
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/queues/testqueue/jobs", strings.NewReader(`{"payload":{}}`))
+		req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("schedule job %d: status = %d", i, rec.Code)
+		}
+	}
+
+	// Page 1: limit=2.
+	req1 := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs?status=pending&limit=2", nil)
+	req1.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+	var page1 map[string]interface{}
+	if err := json.NewDecoder(rec1.Body).Decode(&page1); err != nil {
+		t.Fatalf("decode page1: %v", err)
+	}
+	if len(page1["items"].([]interface{})) != 2 {
+		t.Errorf("page1 items = %d, want 2", len(page1["items"].([]interface{})))
+	}
+	cursor, ok := page1["next_cursor"].(string)
+	if !ok || cursor == "" {
+		t.Fatal("page1 missing next_cursor")
+	}
+
+	// Page 2: remaining 3 items with limit=4 — should return 3 and no next_cursor.
+	req2 := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs?status=pending&limit=4&cursor="+cursor, nil)
+	req2.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+	var page2 map[string]interface{}
+	if err := json.NewDecoder(rec2.Body).Decode(&page2); err != nil {
+		t.Fatalf("decode page2: %v", err)
+	}
+	if len(page2["items"].([]interface{})) != 3 {
+		t.Errorf("page2 items = %d, want 3", len(page2["items"].([]interface{})))
+	}
+	if _, ok := page2["next_cursor"]; ok {
+		t.Error("page2 should have no next_cursor (last page)")
+	}
+}
+
+func TestHandleListJobs_InvalidQueueName(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/queues/bad:queue/jobs", nil)
+	req.SetBasicAuth(cfg.AdminUser, cfg.AdminPass)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleListJobs_NoAuth(t *testing.T) {
+	database, cleanup := openTestDB(t)
+	defer cleanup()
+
+	cfg := testConfig()
+	router := New(database, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/queues/testqueue/jobs", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 

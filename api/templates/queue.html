@@ -1,0 +1,45 @@
+{{define "title"}}{{.Queue}} — http-queue admin{{end}}
+
+{{define "content"}}
+<section class="hero">
+  <div class="eyebrow"><a href="/admin/">admin</a> / queues</div>
+  <h1>{{.Queue}}</h1>
+</section>
+
+<section class="grid">
+  <div class="panel span-12">
+    <div class="tabs">
+      <a class="tab{{if eq .Status "pending"}} active{{end}}" href="?status=pending">pending ({{.PendingCount}})</a>
+      <a class="tab{{if eq .Status "reserved"}} active{{end}}" href="?status=reserved">reserved ({{.ReservedCount}})</a>
+      <a class="tab{{if eq .Status "dead"}} active{{end}}" href="?status=dead">dead ({{.DeadCount}})</a>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>id</th>
+          <th>attempts</th>
+          <th>created</th>
+          <th>expires</th>
+          <th>worker</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Jobs}}
+        <tr>
+          <td>{{.ID}}</td>
+          <td>{{.Attempts}}</td>
+          <td>{{.CreatedAt}}</td>
+          <td>{{.ExpiresAt}}</td>
+          <td>{{.WorkerID}}</td>
+        </tr>
+        {{else}}
+        <tr class="empty-row"><td colspan="5">No jobs.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{if .NextURL}}
+    <div class="pager"><a href="{{.NextURL}}">next →</a></div>
+    {{end}}
+  </div>
+</section>
+{{end}}

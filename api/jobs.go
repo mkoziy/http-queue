@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -10,6 +11,53 @@ import (
 	"github.com/mkoziy/http-queue/config"
 	"github.com/mkoziy/http-queue/queue"
 )
+
+// HandleListJobs handles GET /queues/{queue}/jobs
+func (h *JobsHandler) HandleListJobs(w http.ResponseWriter, r *http.Request) {
+	queueName := r.PathValue("queue")
+	if queueName == "" {
+		respondError(w, http.StatusBadRequest, "missing queue name")
+		return
+	}
+
+	statusStr := r.URL.Query().Get("status")
+	if statusStr == "" {
+		statusStr = string(queue.StatusPending)
+	}
+
+	var status queue.JobStatus
+	switch queue.JobStatus(statusStr) {
+	case queue.StatusPending, queue.StatusReserved, queue.StatusDead:
+		status = queue.JobStatus(statusStr)
+	default:
+		respondError(w, http.StatusBadRequest, "status must be pending, reserved, or dead")
+		return
+	}
+
+	limit, cursor, ok := parsePaginationParams(w, r)
+	if !ok {
+		return
+	}
+
+	jobs, nextCursor, err := queue.ListJobs(h.db, queueName, status, cursor, limit)
+	if err != nil {
+		if errors.Is(err, queue.ErrInvalidQueueName) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if jobs == nil {
+		jobs = []queue.Job{}
+	}
+	resp := map[string]interface{}{"items": jobs}
+	if nextCursor != "" {
+		resp["next_cursor"] = nextCursor
+	}
+	respondJSON(w, http.StatusOK, resp)
+}
 
 const maxTTLSeconds = int64(1<<63-1) / int64(time.Second)
 

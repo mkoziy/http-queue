@@ -1,0 +1,50 @@
+{{define "title"}}http-queue admin{{end}}
+
+{{define "content"}}
+<section class="hero">
+  <div class="eyebrow">http-queue</div>
+  <h1>admin</h1>
+</section>
+
+<section class="grid">
+  <div class="panel span-8">
+    <h2>Workers</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>id</th>
+          <th>registered</th>
+          <th>last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Workers}}
+        <tr>
+          <td>{{.ID}}</td>
+          <td>{{.RegisteredAt}}</td>
+          <td>{{.LastSeen}}</td>
+        </tr>
+        {{else}}
+        <tr class="empty-row"><td colspan="3">No workers registered.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{if .NextCursor}}
+    <div class="pager"><a href="?cursor={{.NextCursor}}">next →</a></div>
+    {{end}}
+  </div>
+
+  <div class="panel span-4">
+    <h2>Queues</h2>
+    {{if .Queues}}
+    <div class="queue-list">
+      {{range .Queues}}
+      <div class="queue-item"><a href="/admin/queues/{{.}}">{{.}}</a></div>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="empty-state">No queues found.</div>
+    {{end}}
+  </div>
+</section>
+{{end}}

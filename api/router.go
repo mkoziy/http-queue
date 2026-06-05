@@ -14,6 +14,7 @@ func New(database *badger.DB, cfg *config.Config) http.Handler {
 
 	jobsHandler := NewJobsHandler(database, cfg)
 	workersHandler := NewWorkersHandler(database, cfg)
+	uiHandler := NewAdminUIHandler(database)
 
 	// Admin routes (Basic Auth).
 	adminAuth := BasicAuth(cfg)
@@ -24,8 +25,18 @@ func New(database *badger.DB, cfg *config.Config) http.Handler {
 	// POST /workers
 	mux.Handle("POST /workers", adminAuth(http.HandlerFunc(workersHandler.HandleRegisterWorker)))
 
+	// GET /workers
+	mux.Handle("GET /workers", adminAuth(http.HandlerFunc(workersHandler.HandleListWorkers)))
+
 	// DELETE /workers/{id}
 	mux.Handle("DELETE /workers/{id}", adminAuth(http.HandlerFunc(workersHandler.HandleDeregisterWorker)))
+
+	// GET /queues/{queue}/jobs
+	mux.Handle("GET /queues/{queue}/jobs", adminAuth(http.HandlerFunc(jobsHandler.HandleListJobs)))
+
+	// Admin UI routes.
+	mux.Handle("GET /admin/", adminAuth(http.HandlerFunc(uiHandler.HandleHome)))
+	mux.Handle("GET /admin/queues/{queue}", adminAuth(http.HandlerFunc(uiHandler.HandleQueue)))
 
 	// Worker routes (Bearer token).
 	bearerAuth := BearerAuth(database, cfg.LastSeenDebounce)

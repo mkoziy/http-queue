@@ -11,6 +11,41 @@ import (
 	"github.com/mkoziy/http-queue/queue"
 )
 
+// HandleListWorkers handles GET /workers
+func (h *WorkersHandler) HandleListWorkers(w http.ResponseWriter, r *http.Request) {
+	limit, cursor, ok := parsePaginationParams(w, r)
+	if !ok {
+		return
+	}
+
+	workers, nextCursor, err := queue.ListWorkers(h.db, cursor, limit)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	type workerView struct {
+		ID           string `json:"id"`
+		RegisteredAt string `json:"registered_at"`
+		LastSeen     string `json:"last_seen"`
+	}
+
+	items := make([]workerView, 0, len(workers))
+	for _, wk := range workers {
+		items = append(items, workerView{
+			ID:           wk.ID,
+			RegisteredAt: wk.RegisteredAt.UTC().Format("2006-01-02T15:04:05Z"),
+			LastSeen:     wk.LastSeen.UTC().Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	resp := map[string]interface{}{"items": items}
+	if nextCursor != "" {
+		resp["next_cursor"] = nextCursor
+	}
+	respondJSON(w, http.StatusOK, resp)
+}
+
 const headerNextPollSeconds = "X-Next-Poll-Seconds"
 
 // WorkersHandler handles admin worker endpoints.
