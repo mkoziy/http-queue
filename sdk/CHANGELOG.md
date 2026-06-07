@@ -6,6 +6,10 @@ The SDK uses its own semantic versioning and release cadence from `sdk/`. SDK ve
 
 ## Unreleased
 
+## 0.1.0 - 2026-06-07
+
+### Added
+
 - Initial standalone SDK packaging, generated OpenAPI types, worker runtime support, examples, and release flow.
 
 ## Release Notes Template

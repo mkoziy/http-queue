@@ -58,7 +58,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a worker */
+        /**
+         * Register a worker
+         * @description Registers a worker and returns its worker ID plus the opaque bearer token
+         *     used for all worker endpoints. The token is only returned by this response,
+         *     so callers must persist it themselves.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -142,6 +147,9 @@ export interface paths {
          *     for that queue as `ceil(base_interval * sqrt(active_workers))`, clamped
          *     by the configured minimum and maximum intervals. The activity tracker is
          *     in-memory and resets on process restart.
+         *
+         *     Authenticate with `Authorization: Bearer <token>` using the opaque token
+         *     returned once by `POST /workers`.
          *
          *     TTL semantics:
          *     - expired pending jobs are deleted and skipped
@@ -299,7 +307,7 @@ export interface components {
         };
         RegisterWorkerResponse: {
             worker_id: string;
-            /** @description Returned only once at worker registration. */
+            /** @description Opaque bearer token returned only once at worker registration. */
             token: string;
         };
         ClaimedJobResponse: {
@@ -310,7 +318,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description Unauthorized */
+        /** @description Generic unauthorized response with no credential failure details. */
         UnauthorizedText: {
             headers: {
                 [name: string]: unknown;
